@@ -7,10 +7,10 @@ For this purpose, do these steps:
 
 2 . Create an isolated environment for strategies development:
 ```bash
-conda create -n qntdev quantiacs-source::qnt quantiacs-source::ta-lib conda-forge::dash
+conda create -n qntdev quantiacs-source::qnt conda-forge::ta-lib conda-forge::dash=1.18
 ```
 
-And set your API key. You can find it in your profile on https://quantiacs.io .
+Then set your API key. You can find it in your profile on https://quantiacs.io .
 ```bash
 conda env config vars set -n qntdev API_KEY={your_api_key_here}
 ```
