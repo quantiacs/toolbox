@@ -4,6 +4,7 @@ from qnt.ta.shift import shift
 from qnt.ta.atr import atr
 import numpy as np
 import typing as tp
+from qnt.log import log_info, log_err
 
 """
 Directional Movement System
@@ -101,7 +102,7 @@ if __name__ == '__main__':
     )
     t4 = time.time()
 
-    print(
+    log_info(
         t2 - t1, t3 - t2, t4 - t3,
         "relative delta =", abs(adx1 - _adx).mean().values,
         "t(talib)/t(this) =", (t2 - t1) / (t3 - t2)

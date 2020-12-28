@@ -5,6 +5,7 @@ import qnt.ta.ndadapter as nda
 import typing as tp
 import time
 import sys
+from qnt.log import log_info, log_err
 
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.int64), nopython=True)
@@ -75,7 +76,7 @@ def wma(series: nda.NdType, weights: tp.Union[tp.List[float], np.ndarray] = None
     if (weights is None or type(weights) is int):
         if time.time() - last_alert > 60:
             last_alert = time.time()
-            print("Warning! wma(series:ndarray, periods:int) deprecated. Use lwma instead of wma.", file=sys.stderr, flush=True)
+            log_err("Warning! wma(series:ndarray, periods:int) deprecated. Use lwma instead of wma.")
         return lwma(series,weights)
     if type(weights) is list:
         weights = np.array(weights, np.float64)
@@ -91,17 +92,17 @@ def vwma(price: nda.NdType, volume: nda.NdType, periods: int = 20):
 
 
 if __name__ == '__main__':
-    print(np.divide(1., 0.))
+    log_info(np.divide(1., 0.))
 
     d1_array = np.array([0, 1, 2, 3, 4, np.nan, 5, np.nan, 6, 7], np.double)
     d1_result_lwma = lwma(d1_array, 3)
     d1_result_wma = wma(d1_array, [3, 2, 1])
     d1_result_vwma = vwma(d1_array, d1_array, 3)
-    print("d1_array:\n", d1_array, '\n')
-    print('d1_result_lwma:\n', d1_result_lwma)
-    print('d1_result_wma:\n', d1_result_wma)
-    print('d1_result_vwma:\n', d1_result_vwma)
-    print('---')
+    log_info("d1_array:\n", d1_array, '\n')
+    log_info('d1_result_lwma:\n', d1_result_lwma)
+    log_info('d1_result_wma:\n', d1_result_wma)
+    log_info('d1_result_vwma:\n', d1_result_vwma)
+    log_info('---')
 
     np_array = np.array([
         [
@@ -113,24 +114,24 @@ if __name__ == '__main__':
         ]
     ], np.double)
     np_result = lwma(np_array, 2)
-    print("np_array:\n", np_array, '\n')
-    print('np_result:\n', np_result)
-    print('---')
+    log_info("np_array:\n", np_array, '\n')
+    log_info('np_result:\n', np_result)
+    log_info('---')
 
     date_rng = pd.date_range(start='2018-01-01', end='2018-01-04', freq='D')
     df_array = pd.DataFrame(date_rng, columns=['time']).set_index('time')
     df_array['close'] = np.array([1, 2, 3, 4], dtype=np.float)
     df_array['open'] = np.array([5, 6, 7, 8], dtype=np.float)
     df_result = lwma(df_array, 2)
-    print("df_array:\n", df_array, '\n')
-    print('df_result:\n', df_result)
-    print('---')
+    log_info("df_array:\n", df_array, '\n')
+    log_info('df_result:\n', df_result)
+    log_info('---')
 
     xr_array = df_array.to_xarray().to_array("field")
     xr_result = lwma(xr_array, 2)
-    print("xr_array:\n", xr_array.to_pandas(), '\n')
-    print('xr_result:\n', xr_result.to_pandas())
-    print('---')
+    log_info("xr_array:\n", xr_array.to_pandas(), '\n')
+    log_info('xr_result:\n', xr_result.to_pandas())
+    log_info('---')
 
     from qnt.data import load_data, load_assets, ds
     from qnt.xr_talib import WMA
@@ -149,13 +150,13 @@ if __name__ == '__main__':
     ma2 = lwma(price, 25)
     t3 = time.time()
 
-    print(
+    log_info(
         "relative delta =", abs((ma1.fillna(0) - ma2.fillna(0)) / data).max().values,
         "t(talib)/t(lwma) =", (t2 - t1) / (t3 - t2)
     )
 
     ma_lw = lwma(price, 3)
     ma_w = wma(price, [3, 2, 1])
-    print("abs(ma_lw - ma_w).sum() = ", abs(ma_lw - ma_w).fillna(0).sum().values)
+    log_info("abs(ma_lw - ma_w).sum() = ", abs(ma_lw - ma_w).fillna(0).sum().values)
 
     ma_vw = vwma(price, vol, 3)

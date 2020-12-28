@@ -1,6 +1,6 @@
 package:
-  name: "toolbox"
-  version: "0.0.179"
+  name: "qnt"
+  version: "0.0.192"
 
 source:
   path: .
@@ -17,6 +17,7 @@ requirements:
   - setuptools
 
   run:
+    - python=3.7.*
     - scipy>=1.4.1
     - pandas=>1.0.1
     - xarray>=0.16.0
@@ -25,8 +26,11 @@ requirements:
     - numba=0.47
     - tabulate>=0.8.3
     - python>=3.7
+    - progressbar2
+  #  - conda-forge::dash=1.8.*
   #  - conda-forge::python-avro=1.8.*
-  #  - quantnet::ta-lib
+  #  - quantiacs-source::ta-lib
+  #  - conda-forge::dash
 
 about:
   license: MIT

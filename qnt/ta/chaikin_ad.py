@@ -3,6 +3,7 @@ import qnt.ta.ndadapter as nda
 import numba as nb
 import typing as tp
 from qnt.ta.ema import ema
+from qnt.log import log_info, log_err
 
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.float64[:], nb.float64[:], nb.float64[:]), nopython=True)
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     cadlosc3 = chaikin_osc(cadl3, 3, 10)
     t4 = time.time()
 
-    print(
+    log_info(
         t2 - t1, t3 - t2, t4 - t3,
         "relative delta =", (abs(cadlosc1 - cadlosc2) * 2 / abs(cadlosc1 + cadlosc2)).mean().values,
         "t(talib)/t(this) =", (t2 - t1) / (t3 - t2)

@@ -1,5 +1,6 @@
 from qnt.data.common import *
 import itertools
+from qnt.log import log_info, log_err
 
 
 def load_forms(
@@ -103,7 +104,7 @@ def load_facts(
     }
 
     max_batch_size = min(50, SECGOV_BATCH_SIZE//len(facts))
-    print("load secgov facts...")
+    log_info("load secgov facts...")
     t = time.time()
     for offset in range(0,len(ciks), max_batch_size):
         batch_ciks = []
@@ -124,9 +125,9 @@ def load_facts(
         else:
             for f in facts:
                 yield f
-        print("fetched chunk", (offset//max_batch_size + 1), '/', math.ceil(len(ciks)/max_batch_size), math.ceil(time.time()-t), 's')
+        log_info("fetched chunk", (offset // max_batch_size + 1), '/', math.ceil(len(ciks) / max_batch_size), math.ceil(time.time() - t), 's')
 
-    print("facts loaded.")
+    log_info("facts loaded.")
 
 
 SECGOV_BATCH_SIZE = 2000

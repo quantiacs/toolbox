@@ -3,6 +3,7 @@ from qnt.data.secgov import load_facts
 import itertools
 import pandas as pd
 import datetime as dt
+from qnt.log import log_info, log_err
 
 
 def load_indicators(
@@ -483,4 +484,4 @@ if __name__ == '__main__':
     data = qds.load_data(assets)
 
     indicators = secgov_load_indicators(assets, data.time)
-    print(indicators)
+    log_info(indicators)

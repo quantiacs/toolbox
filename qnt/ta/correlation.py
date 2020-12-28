@@ -2,6 +2,7 @@ import numpy as np
 import numba as nb
 import qnt.ta.ndadapter as nda
 from qnt.ta.roc import roc
+from qnt.log import log_info, log_err
 
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.int64), nopython=True)
@@ -86,7 +87,7 @@ if __name__ == '__main__':
     d1_array = np.array([0.1, 1, 2, 3, 4, np.nan, 5, np.nan, 6, 7], np.double)
     d2_array = np.array([0.1, 3, 5, 9, 12, np.nan, 15, np.nan, 18, 21], np.double)
     d1_result = correlation(d1_array, d2_array, 4)
-    print("d1_array:\n", d1_array, '\n')
-    print("d2_array:\n", d2_array, '\n')
-    print('d1_result:\n', d1_result)
-    print('---')
+    log_info("d1_array:\n", d1_array, '\n')
+    log_info("d2_array:\n", d2_array, '\n')
+    log_info('d1_result:\n', d1_result)
+    log_info('---')

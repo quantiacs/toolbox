@@ -3,6 +3,7 @@ from qnt.ta.ema import wilder_ma
 from qnt.ta.change import change
 import numpy as np
 import typing as tp
+from qnt.log import log_info, log_err
 
 
 def rsi(
@@ -45,7 +46,7 @@ if __name__ == '__main__':
     rsi3 = rsi(data_pd, lambda series: wilder_ma(series, 14))
     t4 = time.time()
 
-    print(
+    log_info(
         t2 - t1, t3 - t2, t4 - t3,
         "relative delta =", abs(rsi1 - rsi2).mean().values,
         "t(talib)/t(this) =", (t2 - t1) / (t3 - t2)

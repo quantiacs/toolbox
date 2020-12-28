@@ -2,6 +2,7 @@ import numpy as np
 import qnt.ta.ndadapter as nda
 import numba as nb
 from qnt.ta.change import change_np_1d
+from qnt.log import log_info, log_err
 
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.float64[:]), nopython=True)
@@ -36,7 +37,7 @@ if __name__ == '__main__':
     obv3 = obv(data.sel(field='close').to_pandas(), data.sel(field='vol').to_pandas())
     t4 = time.time()
 
-    print(
+    log_info(
         t2 - t1, t3 - t2, t4 - t3,
         "relative delta =", (abs(obv1 - obv2) * 2 / (obv1 + obv2)).mean().values,
         "t(talib)/t(this) =", (t2 - t1) / (t3 - t2)

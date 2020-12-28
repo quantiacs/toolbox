@@ -3,6 +3,7 @@ from qnt.ta.ema import ema
 from qnt.ta.shift import shift
 import numpy as np
 import typing as tp
+from qnt.log import log_info, log_err
 
 
 def roc(series: nda.NdType, periods: int = 7) -> nda.NdType:
@@ -42,7 +43,7 @@ if __name__ == '__main__':
     roc3 = roc(data.to_pandas(), 7)
     t4 = time.time()
 
-    print(
+    log_info(
         t2 - t1, t3 - t2, t4 - t3,
         "relative delta =", (abs(roc1 - roc2) * 2 / (roc1 + roc2)).mean().values,
         "t(talib)/t(this) =", (t2 - t1) / (t3 - t2)

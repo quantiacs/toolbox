@@ -2,4 +2,4 @@
 
 #conda install anaconda-client
 
-anaconda upload --force -u quantiacs qnt-*
+anaconda upload --force -u quantiacs-source qnt-*

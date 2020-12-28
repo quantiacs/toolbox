@@ -46,26 +46,27 @@ output = xr.ones_like(data.sel(field=qndata.f.CLOSE))
 # output *= 1
 
 output.loc[{"time":slice('2017-01-01','2019-01-01')}] = np.nan
-output.loc[{"time":slice('2018-01-01','2019-01-01'), "asset": "NASDAQ:MSFT"}] = 1
+print(output.asset.values.tolist())
+# output.loc[{"time":slice('2018-01-01','2019-01-01'), "asset": "NASDAQ:MSFT"}] = 1
 output = output.dropna('time', 'all')
-
-print("----")
-print("First check.")
-
-qndata.check_output(output, data)
-
-print("----")
-print("Fix output.")
-
-output = qndata.clean_output(output, data)
-
-print("----")
-print("Second check.")
-
-qndata.check_output(output, data)
-
-print(output.to_pandas())
-print(output[0, 0].item())
-
-
-
+#
+# print("----")
+# print("First check.")
+#
+# qndata.check_output(output, data)
+#
+# print("----")
+# print("Fix output.")
+#
+# output = qndata.clean_output(output, data)
+#
+# print("----")
+# print("Second check.")
+#
+# qndata.check_output(output, data)
+#
+# print(output.to_pandas())
+# print(output[0, 0].item())
+#
+#
+#

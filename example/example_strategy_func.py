@@ -8,7 +8,7 @@ from qnt.stepper import test_strategy
 from qnt.stats import *
 
 def init(data):
-    print("init")
+    log_info("init")
 
 def step(data):
     assets = data.sel(**{ds.FIELD: f.OPEN})
@@ -27,9 +27,9 @@ def step(data):
 init_data_length = 14  # data length for init
 
 assets = load_assets()
-print(len(assets))
+log_info(len(assets))
 ids = [i['id'] for i in assets]
-print(ids)
+log_info(ids)
 data = load_data(assets=ids, min_date='2015-01-01', dims=(ds.TIME, ds.ASSET, ds.FIELD))
 
 # print(data.sel(asset='AMEX:AIRI').dropna('time').to_pandas().to_csv())
@@ -44,8 +44,8 @@ write_output(output)
 pd.set_option('display.max_colwidth', -1)
 stat1 = calc_stat(data, output)
 stat2 = calc_stat(data, output[::-1])
-print(xr.concat([stat1.sel(field='sharpe_ratio'), stat2.sel(field='sharpe_ratio')],
-                pd.Index(['f', 'b'], name='d')).to_pandas())
+log_info(xr.concat([stat1.sel(field='sharpe_ratio'), stat2.sel(field='sharpe_ratio')],
+                   pd.Index(['f', 'b'], name='d')).to_pandas())
 
 stat1.to_pandas().to_csv("stat.csv")
 

@@ -38,4 +38,4 @@ def mix_weights(primary, secondary, max_weight = 0.049):
 
 
 def cut_big_positions(weights, max_weight = 0.049):
-    return weights.where(abs(weights) > max_weight, np.sign(weights)*max_weight, weights)
+    return xr.where(abs(weights) > max_weight, np.sign(weights)*max_weight, weights)

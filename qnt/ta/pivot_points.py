@@ -2,6 +2,7 @@ import numpy as np
 import numba as nb
 import pandas as pd
 import qnt.ta.ndadapter as nda
+from qnt.log import log_info, log_err
 
 """
 Pivot Points - indicator of tops and bottoms
@@ -69,9 +70,9 @@ def pivot_points(series: nda.NdType, top_periods: int, bottom_periods: int) -> n
 if __name__ == '__main__':
     d1_array = np.array([0, 1, 2, 1, 1, np.nan, 0, np.nan, 1, -1, 0, 1], np.double)
     d1_result = pivot_points(d1_array, 2, 2)
-    print("d1_array:\n", d1_array, '\n')
-    print('d1_result:\n', d1_result)
-    print('---')
+    log_info("d1_array:\n", d1_array, '\n')
+    log_info('d1_result:\n', d1_result)
+    log_info('---')
 
     np_array = np.array([
         [
@@ -83,24 +84,24 @@ if __name__ == '__main__':
         ]
     ], np.double)
     np_result = pivot_points(np_array, 2, 2)
-    print("np_array:\n", np_array, '\n')
-    print('np_result:\n', np_result)
-    print('---')
+    log_info("np_array:\n", np_array, '\n')
+    log_info('np_result:\n', np_result)
+    log_info('---')
 
     date_rng = pd.date_range(start='2018-01-01', end='2018-01-12', freq='D')
     df_array = pd.DataFrame(date_rng, columns=['time']).set_index('time')
     df_array['close'] = np.array([0, 1, 2, 1, 1, np.nan, 0, np.nan, 1, -1, 0, 1], dtype=np.float)
     df_array['open'] = np.array([0, -1, -2, -1, -1, np.nan, 0, np.nan, -1, -1, 1, 1], dtype=np.float)
     df_result = pivot_points(df_array, 2, 2)
-    print("df_array:\n", df_array, '\n')
-    print('df_result:\n', df_result)
-    print('---')
+    log_info("df_array:\n", df_array, '\n')
+    log_info('df_result:\n', df_result)
+    log_info('---')
 
     xr_array = df_array.to_xarray().to_array("field")
     xr_result = pivot_points(xr_array, 2)
-    print("xr_array:\n", xr_array.to_pandas(), '\n')
-    print('xr_result:\n', xr_result.to_pandas())
-    print('---')
+    log_info("xr_array:\n", xr_array.to_pandas(), '\n')
+    log_info('xr_result:\n', xr_result.to_pandas())
+    log_info('---')
 
     # from qnt.data import load_data, load_assets, ds
     # from qnt.xr_talib import SMA

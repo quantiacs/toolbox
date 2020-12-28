@@ -7,7 +7,7 @@ from qnt.data import ds, f, load_data, write_output, load_assets
 from qnt.stepper import test_strategy
 from qnt.stats import *
 
-print(xr.DataArray(np.full([0, 10], np.nan), dims=[ds.TIME, ds.FIELD], coords={ds.TIME: [], ds.FIELD: [
+log_info(xr.DataArray(np.full([0, 10], np.nan), dims=[ds.TIME, ds.FIELD], coords={ds.TIME: [], ds.FIELD: [
     stf.EQUITY, stf.RELATIVE_RETURN, stf.VOLATILITY,
     stf.UNDERWATER, stf.MAX_DRAWDOWN, stf.SHARPE_RATIO,
     stf.MEAN_RETURN, stf.BIAS, stf.INSTRUMENTS, stf.AVG_TURNOVER
@@ -18,7 +18,7 @@ class SimpleStrategy:
     need_fix_output = True
 
     def init(self, data):
-        print("init")
+        log_info("init")
 
     def step(self, data):
         assets = data.sel(**{ds.FIELD: f.OPEN})
@@ -35,7 +35,7 @@ class SimpleStrategy:
 
 
 assets = load_assets(min_date='2018-01-01')
-print(len(assets))
+log_info(len(assets))
 ids = ["NASDAQ:AAPL", "NASDAQ:AMZN", "NASDAQ:FB", "NASDAQ:GOOG"]
 data = load_data(assets=ids, min_date='2015-01-01', dims=(ds.TIME, ds.ASSET, ds.FIELD))
 
@@ -45,8 +45,8 @@ write_output(output)
 
 RRo = calc_relative_return(data, output)
 
-print(RRo.mean())
+log_info(RRo.mean())
 
 RRn = calc_relative_return(data, output)
 
-print(RRn.mean())
+log_info(RRn.mean())

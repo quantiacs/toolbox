@@ -1,6 +1,7 @@
 from qnt.ta.ndadapter import NdType
 from qnt.ta.ema import ema
 import typing as tp
+from qnt.log import log_info, log_err
 
 
 def macd(series: NdType, fast_ma: tp.Any = 12, slow_ma: tp.Any = 26, signal_ma: tp.Any = 9) \
@@ -44,7 +45,7 @@ if __name__ == '__main__':
     macd3 = macd(data.to_pandas(), 12, 26, 9)
     t4 = time.time()
 
-    print(
+    log_info(
         t2 - t1, t3 - t2, t4 - t3,
         "relative delta =", (abs((macd1.sel(macd='hist') - macd2_hist) * 2 / macd2_hist)).mean().values,
         "t(talib)/t(this) =", (t2 - t1) / (t3 - t2)

@@ -1,6 +1,7 @@
 import numpy as np
 import numba as nb
 import qnt.ta.ndadapter as nda
+from qnt.log import log_info, log_err
 
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.int64), nopython=True)
@@ -25,4 +26,4 @@ def shift(series: nda.NdType, periods: int = 1) -> nda.NdType:
 if __name__ == "__main__":
     arr = np.array([1, 2, np.nan, 4, 5, np.nan, 7, 9, 0], np.double)
     sh = shift(arr, 2)
-    print(sh)
+    log_info(sh)

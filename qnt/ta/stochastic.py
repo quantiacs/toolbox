@@ -3,6 +3,7 @@ import numba as nb
 import qnt.ta.ndadapter as nda
 from qnt.ta.sma import sma
 import typing as tp
+from qnt.log import log_info, log_err
 
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.float64[:], nb.float64[:], nb.int64), nopython=True)
@@ -89,7 +90,7 @@ if __name__ == '__main__':
     )
     t3 = time.time()
 
-    print(
+    log_info(
         "relative delta =", abs(stoch.sel(field='slowd').fillna(0) - sd.fillna(0)).mean().values,
         "t(talib)/t(this) =", (t2 - t1) / (t3 - t2)
     )

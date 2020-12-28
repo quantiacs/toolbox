@@ -40,7 +40,7 @@ def load_data_by_type(data_type, **kwargs):
         return futures_load_data(**kwargs)
     elif data_type == 'crypto':
         return crypto_load_data(**kwargs)
-    elif data_type == 'crypto_futures':
+    elif data_type == 'crypto_futures' or data_type == 'cryptofutures':
         return cryptofutures_load_data(**kwargs)
     else:
         raise Exception("Wrong data_type.")

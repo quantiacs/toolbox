@@ -3,6 +3,7 @@ from qnt.ta.ndadapter import NdType
 from qnt.ta.ema import wilder_ma
 import numpy as np
 import typing as tp
+from qnt.log import log_info, log_err
 
 
 def tr(high: NdType, low: NdType, close: NdType) -> NdType:
@@ -36,7 +37,7 @@ if __name__ == '__main__':
                data.sel(field='close').to_pandas(), 14)
     t4 = time.time()
 
-    print(
+    log_info(
         t2 - t1, t3 - t2, t4 - t3,
         "relative delta =", (abs(atr1 - atr2) * 2 / (atr1 + atr2)).mean().values,
         "t(talib)/t(this) =", (t2 - t1) / (t3 - t2)

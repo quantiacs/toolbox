@@ -1,8 +1,8 @@
 from setuptools import setup
 
 setup(
-    name="toolbox",
-    version="0.0.179",
+    name="qnt",
+    version="0.0.191",
     url="https://quantiacs.io",
     license='MIT',
     packages=['qnt', 'qnt.ta', 'qnt.data'],

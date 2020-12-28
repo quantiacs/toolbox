@@ -1,3 +1,5 @@
+from qnt.log import log_info, log_err
+
 output_schema = {
     "type": "record",
     "name": "DataArray",
@@ -125,7 +127,7 @@ def read_outputs_from_file(avf_bytes):
 
 
 if __name__ == '__main__':
-    print("testing avro conversions...")
+    log_info("testing avro conversions...")
     output = xr.DataArray(
         np.random.rand(2, 2),
         dims=['time', 'asset'],
@@ -135,7 +137,7 @@ if __name__ == '__main__':
         }
     )
 
-    print("check conversion to avro record")
+    log_info("check conversion to avro record")
 
     av_record = convert_output_to_avro_record(output)
     import json
@@ -149,13 +151,13 @@ if __name__ == '__main__':
     assert parsed['coords']['asset'] == output.coords[ds.ASSET].values.tolist()
     assert parsed['values'] == output.values.reshape([4]).tolist()
 
-    print("check conversion from avro record")
+    log_info("check conversion from avro record")
 
     output2 = convert_avro_record_to_output(av_record)
 
     assert (output.identical(output2))
 
-    print("check conversion to avro file")
+    log_info("check conversion to avro file")
 
     avr_file = output_to_avro_file(output)
     avr_file_reader = adf.DataFileReader(BytesIO(avr_file), aio.DatumReader())
@@ -164,7 +166,7 @@ if __name__ == '__main__':
     assert aio.Validate(schema, file_parsed)
     assert parsed == file_parsed
 
-    print("check conversion from avro file")
+    log_info("check conversion from avro file")
 
     output3 = avro_file_to_output(avr_file)
 

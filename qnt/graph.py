@@ -1,8 +1,65 @@
 import plotly.offline as ply
 import plotly.graph_objs as go
 import math
+import logging
 
-ply.init_notebook_mode(connected=True)
+
+def is_notebook():
+    try:
+        from IPython import get_ipython
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True   # Jupyter notebook or qtconsole
+        elif shell == 'TerminalInteractiveShell':
+            return False  # Terminal running IPython
+        else:
+            return False  # Other type (?)
+    except:
+        return False # Probably standard Python interpreter
+
+
+if is_notebook():
+    ply.init_notebook_mode(connected=True)
+
+
+def make_major_plots(stats):
+    pd_stat = stats.to_pandas()
+    try:
+        performance = pd_stat.loc[:, 'equity']
+        equity_fig = make_plot_filled(performance.index, performance, name=" PnL (Equity)", type="log")
+    except:
+        equity_fig = None
+        logging.exception("can't build equity chart")
+
+    try:
+        UWchart = pd_stat.loc[:, 'underwater']
+        underwater_fig = make_plot_filled(UWchart.index, UWchart, color="darkred", name="Underwater Chart", range_max=0)
+    except:
+        underwater_fig = None
+        logging.exception("can't build underwater chart")
+
+    try:
+        # show rolling Sharpe ratio on a 3-year basis:
+        SRchart = pd_stat.loc[:, 'sharpe_ratio']
+        mv = SRchart.iloc[-len(SRchart)//2:].min()
+        xv = SRchart.iloc[-len(SRchart)//2:].max()
+        mv, xv = mv - 0.03 * (xv - mv), xv + 0.03 * (xv - mv)
+        sharpe_ratio_fig = make_plot_filled(SRchart.index, SRchart, color="#F442C5", name="Rolling SR",
+                                                    range_min = mv, range_max = xv)
+    except:
+        sharpe_ratio_fig = None
+        logging.exception("can't build sharpe_ratio chart")
+
+    try:
+        # show bias chart:
+        biaschart = pd_stat.loc[:, 'bias']
+        bias_fig = make_plot_filled(biaschart.index, biaschart, color="#5A6351", name="Bias Chart")
+    except:
+        bias_fig = None
+        logging.exception("can't build bias chart")
+
+    if not is_notebook():
+        return equity_fig, underwater_fig, sharpe_ratio_fig, bias_fig
 
 
 def make_plot(index, data, color="#17BECF", width=3, name="chart", range_min = None, range_max = None, type = None):
@@ -53,7 +110,8 @@ def make_plot_double(index, data1, data2, color1="#17BECF", color2="#BA1244", wi
     ply.iplot(fig)
 
 
-def make_plot_filled(index, data, color="#17BECF", width=3, name="chart", range_min = None, range_max = None, type = None):
+def make_plot_filled(index, data, color="#17BECF", width=3, name="chart", range_min = None, range_max = None,
+                     type = None, show=True):
     """Makes a filled 2d scatter plot using index and data."""
     
     table = go.Scatter(x=index, y=data, line=dict(color=color, width=width), fill="tonexty", name=name)
@@ -82,5 +140,8 @@ def make_plot_filled(index, data, color="#17BECF", width=3, name="chart", range_
     layout = go.Layout(showlegend=True, yaxis=dict(range = range, type=type))
                        
     fig = go.Figure(data=data_, layout=layout)
-    
-    ply.iplot(fig)
+
+    if is_notebook():
+        ply.iplot(fig)
+    else:
+        return fig

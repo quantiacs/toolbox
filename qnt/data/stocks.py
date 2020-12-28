@@ -1,6 +1,7 @@
 import qnt.data.id_translation as idt
 import sys
 
+from qnt.log import log_info, log_err
 from qnt.data.common import *
 
 
@@ -67,7 +68,7 @@ def load_data(
     """
     t = time.time()
     data = load_origin_data(assets=assets, min_date=min_date, max_date=max_date, tail=tail)
-    print("Data loaded " + str(round(time.time() - t)) + "s")
+    log_info("Data loaded " + str(round(time.time() - t)) + "s")
     data = adjust_by_splits(data, False)
     data = data.transpose(*dims)
     if forward_order:
@@ -163,13 +164,14 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
     chunk_asset_count = math.floor(BATCH_LIMIT / days)
 
     chunks = []
+    assets_arg.sort()
 
     for offset in range(0, len(assets_arg), chunk_asset_count):
         chunk_assets = assets_arg[offset:(offset + chunk_asset_count)]
         chunk = load_origin_data_chunk(chunk_assets, min_date.isoformat(), max_date.isoformat())
         if chunk is not None:
             chunks.append(chunk)
-        print(
+        log_info(
             "fetched chunk "
             + str(round(offset / chunk_asset_count + 1)) + "/"
             + str(math.ceil(len(assets_arg) / chunk_asset_count)) + " "
@@ -239,10 +241,10 @@ if __name__ == '__main__':
     # import qnt.id_translation
     # qnt.id_translation.USE_ID_TRANSLATION = False
     assets = load_list()
-    print(len(assets))
+    log_info(len(assets))
     ids = [i['id'] for i in assets]
-    print(ids)
+    log_info(ids)
     data = load_data(min_date='1998-11-09', assets=ids[-2000:])
-    print(data.sel(field='close').transpose().to_pandas())
+    log_info(data.sel(field='close').transpose().to_pandas())
 
 

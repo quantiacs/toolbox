@@ -1,6 +1,7 @@
 from qnt.ta.ndadapter import NdType, nd_to_1d_universal_adapter
 from qnt.ta.change import change
 import numpy as np
+from qnt.log import log_info, log_err
 
 
 def ad_ratio_np(prices: np.ndarray) -> np.ndarray:
@@ -59,7 +60,7 @@ if __name__ == '__main__':
 
     adr = ad_ratio(data)
     adr_pd = ad_ratio(data.to_pandas())
-    print(adr.to_pandas() - adr_pd.T)
+    log_info(adr.to_pandas() - adr_pd.T)
 
     adl = ad_line(data)
 
