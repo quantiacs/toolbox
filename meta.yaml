@@ -26,10 +26,10 @@ requirements:
     - numba=0.47
     - tabulate>=0.8.3
     - python>=3.7
-    - progressbar2
+    - progressbar2=4.8.5
   #  - conda-forge::dash=1.8.*
   #  - conda-forge::python-avro=1.8.*
-  #  - quantiacs-source::ta-lib
+  #  - conda-forge::ta-lib
   #  - conda-forge::dash
 
 about:
