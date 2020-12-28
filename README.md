@@ -3,7 +3,7 @@ QNT library for strategies development.
 You can use this library on your PC.
 For this purpose, do these steps: 
 
-1 . Install anaconda (v2020.03 is recommended): https://www.anaconda.com/products/individual
+1 . Install anaconda (v2020.02 is recommended): https://www.anaconda.com/products/individual
 
 2 . Create an isolated environment for strategies development:
 ```bash
