@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="qnt",
-    version="0.0.192",
+    version="0.0.195",
     url="https://quantiacs.io",
     license='MIT',
     packages=['qnt', 'qnt.ta', 'qnt.data'],

@@ -272,7 +272,7 @@ def calc_volatility(relative_return, max_periods=None, min_periods=2):
     :return: portfolio volatility
     """
     if max_periods is None:
-        max_periods = get_default_is_period(relative_return)
+        max_periods = len(relative_return.time)
     max_periods = min(max_periods, len(relative_return.coords[ds.TIME]))
     min_periods = min(min_periods, max_periods)
     return relative_return.rolling({ds.TIME: max_periods}, min_periods=min_periods).std()
@@ -287,7 +287,7 @@ def calc_volatility_annualized(relative_return, max_periods=None, min_periods=2,
     if points_per_year is None:
         points_per_year = calc_avg_points_per_year(relative_return)
     if max_periods is None:
-        max_periods = get_default_is_period(relative_return)
+        max_periods = len(relative_return.time)
     return calc_volatility(relative_return, max_periods, min_periods) * pow(
         points_per_year, 1. / 2)
 
@@ -319,7 +319,7 @@ def calc_sharpe_ratio_annualized(relative_return, max_periods=None, min_periods=
     if points_per_year is None:
         points_per_year = calc_avg_points_per_year(relative_return)
     if max_periods is None:
-        max_periods = get_default_is_period(relative_return)
+        max_periods = len(relative_return.time)
     m = calc_mean_return_annualized(relative_return, max_periods, min_periods, points_per_year=points_per_year)
     v = calc_volatility_annualized(relative_return, max_periods, min_periods, points_per_year=points_per_year)
     sr = m / v
@@ -336,7 +336,7 @@ def calc_mean_return(relative_return, max_periods=None, min_periods=1, points_pe
     if points_per_year is None:
         points_per_year = calc_avg_points_per_year(relative_return)
     if max_periods is None:
-        max_periods = get_default_is_period(relative_return)
+        max_periods =  len(relative_return.coords[ds.TIME])
     max_periods = min(max_periods, len(relative_return.coords[ds.TIME]))
     min_periods = min(min_periods, max_periods)
     return xr.ufuncs.exp(
@@ -453,7 +453,7 @@ def calc_avg_holding_time(portfolio_history,
     if points_per_year is None:
         points_per_year = calc_avg_points_per_year(portfolio_history)
     if max_periods is None:
-        max_periods = points_per_year
+        max_periods = len(portfolio_history.time)
 
     ph = portfolio_history.copy(True)
 
@@ -605,9 +605,9 @@ def get_default_slippage(data):
     if data.name == 'stocks':
         return float(get_env('SL_STOCKS', '0.05', True))
     if data.name == 'futures':
-        return float(get_env('SL_FUTURES', '0.03', True))
+        return float(get_env('SL_FUTURES', '0.04', True))
     if data.name == 'cryptofutures' or data.name == 'crypto_futures':
-        return float(get_env('SL_CRYPTOFUTURES', '0.03', True))
+        return float(get_env('SL_CRYPTOFUTURES', '0.04', True))
     if data.name == 'crypto':
         return float(get_env('SL_CRYPTO', '0.05', True))
     return 0.05
@@ -670,7 +670,7 @@ def calc_stat(data, portfolio_history,
         points_per_year = calc_avg_points_per_year(data)
 
     if max_periods is None:
-        max_periods = get_default_is_period(data)
+        max_periods = len(data.time)
 
     if slippage_factor is None:
         slippage_factor = get_default_slippage(data)
@@ -702,8 +702,12 @@ def calc_stat(data, portfolio_history,
     adj_data, adj_ph = arrange_data(data, portfolio_history, per_asset)
     B = calc_bias(adj_ph, per_asset)
     I = calc_instruments(adj_ph, per_asset)
-    T = calc_avg_turnover(adj_ph, E, adj_data, min_periods=min_periods, max_periods=max_periods, per_asset=per_asset,
-                          points_per_year=points_per_year)
+    T = calc_avg_turnover(adj_ph, E, adj_data,
+                          min_periods=min_periods,
+                          max_periods=max_periods,
+                          per_asset=per_asset,
+                          points_per_year=points_per_year
+                          )
 
     HT = calc_avg_holding_time(adj_ph,  # E, adj_data,
                                min_periods=min_periods, max_periods=max_periods,

@@ -13,6 +13,7 @@ import io
 import qnt.stats
 from .data import id_translation as idt
 import qnt.output
+import sys
 
 fractions_fn = "../fractions.nc.gz"
 last_data_fn = "../last_data.txt"
@@ -23,7 +24,7 @@ result_dir = "precheck_results"
 def run_init():
     if os.path.exists("init.ipynb"):
         log_info("Run init.ipynb..")
-        cmd = "jupyter nbconvert --to html --ExecutePreprocessor.timeout=1800 --execute init.ipynb --stdout "  + \
+        cmd = " jupyter nbconvert --to html --ExecutePreprocessor.timeout=1800 --execute init.ipynb --stdout "  + \
               "| html2text -utf8"
         # "\\\n 2>&1"
         log_info("cmd:", cmd)
@@ -91,7 +92,7 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
             timeout = 30 * 60
         if data_type == 'futures':
             timeout = 10 * 60
-        if data_type == 'crypto' or data_type == 'crypto_futures':
+        if data_type == 'crypto' or data_type == 'crypto_futures' or data_type == 'cryptofutures':
             timeout = 5 * 60
 
         data_url = urllib.parse.urljoin(urllib.parse.urljoin(qnt.data.common.BASE_URL, 'last/'), date.isoformat()) + "/"
@@ -99,7 +100,7 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
               "LAST_DATA_PATH=" + last_data_fn + " \\\n" + \
               "OUTPUT_PATH=" + fractions_fn + " \\\n" + \
               "SUBMISSION_ID=-1\\\n" + \
-              "jupyter nbconvert --to html --ExecutePreprocessor.timeout=" + str(timeout)+ " --execute strategy.ipynb --output=" + html_fn  # + \
+              " jupyter nbconvert --to html --ExecutePreprocessor.timeout=" + str(timeout)+ " --execute strategy.ipynb --output=" + html_fn  # + \
               # "\\\n 2>&1"
         log_info("cmd:", cmd)
         log_info("output:")
@@ -206,7 +207,8 @@ def load_output(fn, date):
 
 
 def check_output(output, data_type='stocks'):
-    if data_type != 'stocks' and data_type != 'futures' and data_type != 'crypto':
+    if data_type != 'stocks' and data_type != 'stocks_long' and data_type != 'futures' \
+            and data_type != 'crypto' and data_type != 'crypto_futures' and data_type != 'cryptofutures':
         log_err("Unsupported data_type", data_type)
         return
 

@@ -70,8 +70,8 @@ def clean(output, data, kind=None):
             log_info("WARNING! Output contain missed dates.")
             log_info("Adding missed dates and set zero...")
             add = xr.concat([output.isel(time=-1)] * len(missed_dates), pd.DatetimeIndex(missed_dates, name="time"))
+            add = xr.full_like(add, np.nan)
             output = xr.concat([output, add], dim='time')
-            output = normalize(output)
             output = output.fillna(0)
             if kind == "stocks" or kind == "stocks_long":
                 output = output.where(data.sel(field='is_liquid') > 0)
@@ -159,23 +159,23 @@ def check(output, data, kind=None):
                 log_info("Ok.")
 
         if not single_day:
-            if kind == 'crypto' or kind == 'cryptofutures' or kind == 'crypto_futures':
-                log_info("Check holding time...")
-                ht = qns.calc_avg_holding_time(output)
-                ht = ht.isel(time=-1).values
-                if ht < 4:
-                    log_err("ERROR! The holding time is too low.", ht, "<", 4)
-                else:
-                    log_info("Ok.")
-
-            if kind == 'stocks_long':
-                log_info("Check holding time...")
-                ht = qns.calc_avg_holding_time(output)
-                ht = ht.isel(time=-1).values
-                if ht < 15:
-                    log_err("ERROR! The holding time is too low.", ht, "<", 15)
-                else:
-                    log_info("Ok.")
+            # if kind == 'crypto' or kind == 'cryptofutures' or kind == 'crypto_futures':
+            #     log_info("Check holding time...")
+            #     ht = qns.calc_avg_holding_time(output)
+            #     ht = ht.isel(time=-1).values
+            #     if ht < 4:
+            #         log_err("ERROR! The holding time is too low.", ht, "<", 4)
+            #     else:
+            #         log_info("Ok.")
+            #
+            # if kind == 'stocks_long':
+            #     log_info("Check holding time...")
+            #     ht = qns.calc_avg_holding_time(output)
+            #     ht = ht.isel(time=-1).values
+            #     if ht < 15:
+            #         log_err("ERROR! The holding time is too low.", ht, "<", 15)
+            #     else:
+            #         log_info("Ok.")
 
             if kind == 'stocks_long':
                 log_info("Check positive positions...")
