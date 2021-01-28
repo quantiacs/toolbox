@@ -232,3 +232,5 @@ def check_output(output, data_type='stocks'):
 
     qnt.output.check(output, data)
 
+
+qnt.data.common.track_event("PRECHECK")

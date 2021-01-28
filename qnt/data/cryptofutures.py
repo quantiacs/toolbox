@@ -1,5 +1,5 @@
 from qnt.data.common import *
-
+import qnt.data.common as qdc
 
 def load_data(
         assets: tp.Union[None, tp.List[str]] = None,
@@ -9,25 +9,20 @@ def load_data(
         forward_order: bool = True,
         tail: tp.Union[datetime.timedelta, int, float] = DEFAULT_TAIL
 ) -> tp.Union[None, xr.DataArray]:
+    track_event("DATA_CRYPTOFUTURES")
     if max_date is None and "LAST_DATA_PATH" in os.environ:
         whole_data_file_flag_name = get_env("LAST_DATA_PATH", "last_data.txt")
         with open(whole_data_file_flag_name, "w") as text_file:
             text_file.write("last")
 
-    max_date = parse_date_and_hour(max_date)
-
-    if MAX_DATETIME_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATETIME_LIMIT, max_date)
-        else:
-            max_date = MAX_DATETIME_LIMIT
+    max_date = parse_date(max_date)
 
     if min_date is not None:
-        min_date = parse_date_and_hour(min_date)
+        min_date = parse_date(min_date)
     else:
         min_date = max_date - parse_tail(tail)
 
-    uri = "cryptofutures?min_date=" + datetime_to_hours_str(min_date) + "&max_date=" + datetime_to_hours_str(max_date)
+    uri = "cryptofutures?min_date=" + min_date.isoformat() + "&max_date=" + max_date.isoformat()
     raw = request_with_retry(uri, None)
     if raw is None or len(raw) < 1:
         arr = xr.DataArray(
@@ -55,6 +50,3 @@ def load_data(
 
     arr.name = "cryptofutures"
     return arr.transpose(*dims)
-
-
-BATCH_LIMIT = 300000

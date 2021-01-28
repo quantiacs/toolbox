@@ -3,6 +3,7 @@ import datetime
 import os
 import logging
 from urllib.parse import urljoin
+import urllib.error
 import sys
 import urllib.request
 import time
@@ -73,7 +74,7 @@ def request_with_retry(uri, data):
     retries = sys.maxsize if "SUBMISSION_ID" in os.environ else 5
     for r in range(0, retries):
         try:
-            req = urllib.request.Request(url, data, headers={'Accept-Encoding': 'gzip'})
+            req = urllib.request.Request(url, data, headers={'Accept-Encoding': 'gzip', "X-Api-Key": api_key})
             with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
                 length = response.getheader('content-length')
                 if length:
@@ -109,20 +110,15 @@ def request_with_retry(uri, data):
 
 def parse_date(dt: tp.Union[None, str, datetime.datetime, datetime.date]) -> datetime.date:
     if dt is None:
-        try:
-            return parse_date_and_hour(dt).date()
-        except:
-            return datetime.date.today()
-    if isinstance(dt, np.datetime64):
-        return pd.Timestamp(dt).date()
-    if isinstance(dt, str):
-        return datetime.datetime.strptime(dt + "Z+00:00", "%Y-%m-%dZ%z").date()
-    if isinstance(dt, datetime.datetime):
-        dt = datetime.datetime.fromtimestamp(dt.timestamp(), tz=datetime.timezone.utc)  # rm timezone
-        return dt.date()
-    if isinstance(dt, datetime.date):
-        return dt
-    raise Exception("invalid date " + str(type(dt)))
+        res = datetime.date.today()
+    else:
+        res = pd.Timestamp(dt).date()
+    if MAX_DATE_LIMIT is not None:
+        if res is not None:
+            res = min(MAX_DATE_LIMIT, res)
+        else:
+            res = MAX_DATE_LIMIT
+    return res
 
 
 def parse_tail(tail: tp.Union[datetime.timedelta, int]):
@@ -130,81 +126,29 @@ def parse_tail(tail: tp.Union[datetime.timedelta, int]):
 
 
 def parse_date_and_hour(dt: tp.Union[None, str, datetime.datetime, datetime.date]) -> datetime.datetime:
+    print(dt)
     if dt is None:
-        try:
-            dt = BASE_URL.split("/")[-2]
-            return parse_date_and_hour(dt)
-        except:
-            return datetime.datetime.now(tz=datetime.timezone.utc)
-    if isinstance(dt, np.datetime64):
-        return pd.Timestamp(dt)
-    if isinstance(dt, datetime.date):
-        return datetime.datetime(dt.year, dt.month, dt.day, tzinfo=datetime.timezone.utc)
-    if isinstance(dt, datetime.datetime):
-        dt = datetime.datetime.fromtimestamp(dt.timestamp(), tz=datetime.timezone.utc)  # rm timezone
-        dt = dt.isoformat()
-    if isinstance(dt, str):
-        dt = dt.split(":")[0]
-        if 'T' in dt:
-            return datetime.datetime.strptime(dt + "Z+00:00", "%Y-%m-%dT%HZ%z")
+        res = datetime.datetime.now()
+    else:
+        res = pd.Timestamp(dt).to_pydatetime()
+    if MAX_DATETIME_LIMIT is not None:
+        if res is not None:
+            res = min(MAX_DATETIME_LIMIT, res)
         else:
-            return datetime.datetime.strptime(dt + "Z+00:00", "%Y-%m-%dZ%z")
-    raise Exception("invalid date " + str(type(dt)))
+            res = MAX_DATETIME_LIMIT
+    return res
 
 
 def datetime_to_hours_str(dt: datetime.datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H")
 
 
-# TODO Strange stuff, need to check usage
-
-def from_xarray_3d_to_dict_of_pandas_df(xarray_data):
-    assets_names = xarray_data.coords[ds.ASSET].values
-    pandas_df_dict = {}
-    for asset_name in assets_names:
-        pandas_df_dict[asset_name] = xarray_data.loc[:, :, asset_name].to_pandas()
-
-    return pandas_df_dict
-
-
-def from_dict_to_xarray_1d(weights):
-    weights_assets_list = [key for key in weights]
-    weights_values_list = [weights[key] for key in weights]
-
-    return xr.DataArray(weights_values_list, dims=[ds.ASSET], coords={ds.ASSET: weights_assets_list})
-
-
-def filter_liquids_xarray_assets_dataarray(assets_xarray_dataarray):
-    liquid_xarray_assets_dataarray = assets_xarray_dataarray \
-        .where(assets_xarray_dataarray.loc[:, 'is_liquid', :] == 1) \
-        .dropna(ds.TIME, 'all').dropna(ds.ASSET, 'all')
-
-    return liquid_xarray_assets_dataarray
-
-
-def check_weights_xarray_dataarray_for_nonliquids(xarray_weights_dataarray, xarray_assets_dataarray):
-    non_liquid_weights = xarray_weights_dataarray.where(xarray_assets_dataarray[0].loc['is_liquid', :] == 0)
-    non_liquid_weights = non_liquid_weights.where(non_liquid_weights != 0)
-    non_liquid_weights = non_liquid_weights.dropna(ds.ASSET)
-    if len(non_liquid_weights) > 0:
-        raise Exception(non_liquid_weights.coords[ds.ASSET].values)
-
-
-def exclude_weights_xarray_dataarray_from_nonliquids(weights_xarray_dataarray, assets_xarray_dataarray):
-    liquid_weights_xarray_dataarray = weights_xarray_dataarray \
-        .where(assets_xarray_dataarray[0].loc['is_liquid', :] == 1) \
-        .dropna(ds.ASSET, 'all')
-
-    return liquid_weights_xarray_dataarray
-# ///
-
-
 def parse_max_datetime_from_url(url):
-    r = re.compile("^.+/(\\d{4}-\\d{2}-\\d{2})/{0,1}$")
+    r = re.compile("^.+/(\\d{4}-\\d{2}-\\d{2}T\\d{2})/{0,1}$")
     m = r.match(url)
     if m is not None:
         return parse_date_and_hour(m.group(1))
-    r = re.compile("^.+/(\\d{4}-\\d{2}-\\d{2})T\\d{2}/{0,1}$")
+    r = re.compile("^.+/(\\d{4}-\\d{2}-\\d{2})/{0,1}$")
     m = r.match(url)
     if m is not None:
         return parse_date_and_hour(m.group(1))
@@ -287,8 +231,92 @@ if MAX_DATE_LIMIT is None:
     MAX_DATETIME_LIMIT = parse_max_datetime_from_url(BASE_URL)
     MAX_DATE_LIMIT = None if MAX_DATETIME_LIMIT is None else MAX_DATETIME_LIMIT.date()
 
+api_key = os.environ.get("API_KEY", '').strip()
+tracking_host = os.environ.get("TRACKING_HOST", "https://quantiacs.io")
+if api_key != 'default':
+    if api_key == '':
+        log_err("Please, specify the API_KEY.")
+        log_err("See: https://quantiacs.io/documentation/en/user_guide/local_development.html")
+        exit(1)
+    else:
+        url = tracking_host + "/auth/system/account/accountByKey?apiKey=" + api_key
+        print(url)
+        try:
+            resp = urllib.request.urlopen(url)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                log_err("Wrong API_KEY.")
+                log_err("See: https://quantiacs.io/documentation/en/user_guide/local_development.html")
+                exit(1)
+sent_events = set()
+
+
+def track_event(event):
+    if os.environ.get("SUBMISSION_ID", '') != '':
+        return
+    if event in sent_events:
+        return
+    sent_events.add(event)
+    import threading
+    url = tracking_host + '/engine/tracklib?apiKey=' + api_key + '&event=' + event
+    if 'STRATEGY_ID' in os.environ:
+        url = url + '&strategyId=' + os.environ.get('STRATEGY_ID', '')
+    t = threading.Thread(target=get_url_silent, args=(url,))
+    t.start()
+
+
+def get_url_silent(url):
+    try:
+        urllib.request.urlopen(url)
+    except:
+        pass
+
+
 if __name__ == '__main__':
     log_info(parse_max_datetime_from_url('http://hl.datarelay:7070/last/2020-10-07T10/'))
     log_info(parse_max_datetime_from_url('http://hl.datarelay:7070/last/2016-10-28/'))
     # t = parse_max_datetime_from_url('http://hl.datarelay:7070/last/2020-10-07T10/')
     # print(datetime.datetime.combine(t.date(), datetime.time.min))
+
+
+# TODO Strange stuff, need to check usage
+
+def from_xarray_3d_to_dict_of_pandas_df(xarray_data):
+    assets_names = xarray_data.coords[ds.ASSET].values
+    pandas_df_dict = {}
+    for asset_name in assets_names:
+        pandas_df_dict[asset_name] = xarray_data.loc[:, :, asset_name].to_pandas()
+
+    return pandas_df_dict
+
+
+def from_dict_to_xarray_1d(weights):
+    weights_assets_list = [key for key in weights]
+    weights_values_list = [weights[key] for key in weights]
+
+    return xr.DataArray(weights_values_list, dims=[ds.ASSET], coords={ds.ASSET: weights_assets_list})
+
+
+def filter_liquids_xarray_assets_dataarray(assets_xarray_dataarray):
+    liquid_xarray_assets_dataarray = assets_xarray_dataarray \
+        .where(assets_xarray_dataarray.loc[:, 'is_liquid', :] == 1) \
+        .dropna(ds.TIME, 'all').dropna(ds.ASSET, 'all')
+
+    return liquid_xarray_assets_dataarray
+
+
+def check_weights_xarray_dataarray_for_nonliquids(xarray_weights_dataarray, xarray_assets_dataarray):
+    non_liquid_weights = xarray_weights_dataarray.where(xarray_assets_dataarray[0].loc['is_liquid', :] == 0)
+    non_liquid_weights = non_liquid_weights.where(non_liquid_weights != 0)
+    non_liquid_weights = non_liquid_weights.dropna(ds.ASSET)
+    if len(non_liquid_weights) > 0:
+        raise Exception(non_liquid_weights.coords[ds.ASSET].values)
+
+
+def exclude_weights_xarray_dataarray_from_nonliquids(weights_xarray_dataarray, assets_xarray_dataarray):
+    liquid_weights_xarray_dataarray = weights_xarray_dataarray \
+        .where(assets_xarray_dataarray[0].loc['is_liquid', :] == 1) \
+        .dropna(ds.ASSET, 'all')
+
+    return liquid_weights_xarray_dataarray
+# ///

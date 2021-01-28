@@ -5,6 +5,7 @@ def load_db_list():
     """
     :return: list of DBs from bls.gov
     """
+    track_event("DATA_BLSGOV_META")
     uri = "bls.gov/db/list"
     js = request_with_retry(uri, None)
     js = js.decode()
@@ -17,7 +18,7 @@ def load_db_meta(db_id:str):
     """
 
     # print(str(max_date))
-
+    track_event("DATA_BLSGOV_META")
     uri = "bls.gov/db/meta?id=" + db_id
     js = request_with_retry(uri, None)
     js = js.decode()
@@ -28,6 +29,7 @@ def load_series_list(db_id:str):
     """
     :return: generator of series
     """
+    track_event("DATA_BLSGOV_META")
     uri = "bls.gov/series/list?id=" + db_id + "&last_series="
     last_series = ''
     while True:
@@ -47,12 +49,8 @@ def load_series_data(
         max_date: tp.Union[str, datetime.date, None] = None,
         tail: tp.Union[datetime.timedelta, int, float] = DEFAULT_TAIL
 ):
+    track_event("DATA_BLSGOV")
     max_date = parse_date(max_date)
-    if MAX_DATE_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATE_LIMIT, max_date)
-        else:
-            max_date = MAX_DATE_LIMIT
 
     if min_date is not None:
         min_date = parse_date(min_date)
@@ -70,12 +68,8 @@ def load_series_aspect(
         max_date: tp.Union[str, datetime.date, None] = None,
         tail: tp.Union[datetime.timedelta, int, float] = DEFAULT_TAIL
 ):
+    track_event("DATA_BLSGOV")
     max_date = parse_date(max_date)
-    if MAX_DATE_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATE_LIMIT, max_date)
-        else:
-            max_date = MAX_DATE_LIMIT
 
     if min_date is not None:
         min_date = parse_date(min_date)

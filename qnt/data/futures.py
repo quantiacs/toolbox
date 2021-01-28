@@ -4,6 +4,7 @@ import json
 
 
 def load_list() -> xr.DataArray:
+    track_event("DATA_FUTURES_META")
     uri = "futures/list"
     js = request_with_retry(uri, None)
     js = js.decode()
@@ -18,18 +19,13 @@ def load_data(
         forward_order: bool = True,
         tail: tp.Union[datetime.timedelta, int, float] = DEFAULT_TAIL
 ) -> tp.Union[None, xr.DataArray]:
+    track_event("DATA_FUTURES_SERIES")
     if max_date is None and "LAST_DATA_PATH" in os.environ:
         whole_data_file_flag_name = get_env("LAST_DATA_PATH", "last_data.txt")
         with open(whole_data_file_flag_name, "w") as text_file:
             text_file.write("last")
 
     max_date = parse_date(max_date)
-
-    if MAX_DATE_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATE_LIMIT, max_date)
-        else:
-            max_date = MAX_DATE_LIMIT
 
     if min_date is not None:
         min_date = parse_date(min_date)

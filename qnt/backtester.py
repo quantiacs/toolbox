@@ -24,6 +24,7 @@ def backtest(*,
              strategy: tp.Callable[[DataSet], xr.DataArray],
              lookback_period: int = 365,
              test_period: int = 365*15,
+             start_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
              window: tp.Union[tp.Callable[[DataSet,np.datetime64,int], DataSet], None] = None,
              step: int = 1,
              analyze: bool = True,
@@ -36,12 +37,14 @@ def backtest(*,
     :param lookback_period: calendar days period for one iteration
     :param strategy: accepts data, returns weights distribution for the last day
     :param test_period: test period (calendar days)
+    :param start_date: start date for backtesting, overrides test period
     :param step: step size
     :param window: function which isolates data for one iterations
     :param analyze: analyze the output and calc stats
     :param build_plots: build plots (require analyze=True)
     :return:
     """
+    qndc.track_event("BACKTEST")
     if window is None:
         window = standard_window
 
@@ -66,9 +69,16 @@ def backtest(*,
 
     log_info("---")
 
+    if start_date is None:
+        start_date = pd.Timestamp.today().to_datetime64() - np.timedelta64(test_period-1, 'D')
+    else:
+        start_date = pd.Timestamp(start_date).to_datetime64()
+        test_period = (pd.Timestamp.today().to_datetime64() - start_date) / np.timedelta64(1, 'D')
+
     log_info("Run first pass...")
     try:
-        qndc.MAX_DATE_LIMIT = datetime.date.today() - datetime.timedelta(days=test_period)
+        qndc.MAX_DATETIME_LIMIT = pd.Timestamp(start_date).to_pydatetime()
+        qndc.MAX_DATE_LIMIT = qndc.MAX_DATETIME_LIMIT.date()
         print("Load data...")
         data = load_data(lookback_period)
         data, time_series = extract_time_series(data)
@@ -80,6 +90,7 @@ def backtest(*,
             log_info("Ok.")
     finally:
         qndc.MAX_DATE_LIMIT = None
+        qndc.MAX_DATETIME_LIMIT = None
 
     log_info("---")
 
@@ -91,7 +102,7 @@ def backtest(*,
         return
 
     log_info("---")
-    result = run_iterations(time_series, data, window, lookback_period, strategy, step)
+    result = run_iterations(time_series, data, window, start_date, lookback_period, strategy, step)
     if result is None:
         return
 
@@ -110,13 +121,12 @@ def backtest(*,
     return result
 
 
-def run_iterations(time_series, data, window, lookback_period, strategy, step):
+def run_iterations(time_series, data, window, start_date, lookback_period, strategy, step):
     log_info("Run iterations...\n")
 
     ts = np.sort(time_series)
     outputs = []
 
-    start_date = ts[0] + np.timedelta64(lookback_period, 'D')
     output_time_coord = ts[ts >= start_date]
     output_time_coord = output_time_coord[::step]
 
@@ -149,7 +159,7 @@ def run_iterations(time_series, data, window, lookback_period, strategy, step):
 
 def standard_window(data, max_date: np.datetime64, lookback_period:int):
     min_date = max_date - np.timedelta64(lookback_period,'D')
-    return data.sel(time=slice(min_date, max_date))
+    return data.loc[dict(time=slice(min_date, max_date))]
 
 
 def extract_time_series(data):
@@ -161,6 +171,10 @@ def extract_time_series(data):
 
 def is_submitted():
     return os.environ.get("SUBMISSION_ID", "") != ""
+
+
+def is_interact():
+    return 'NONINTERACT' not in os.environ
 
 
 def analyze_results(output, data, kind, build_plots):
@@ -348,21 +362,24 @@ def build_plots_jupyter(output, stat_global, stat_per_asset):
             except:
                 log_info(output.iloc[row_offset:row_offset + tail_r, column_offset:column_offset + tail_c])
 
-        try:
-            from ipywidgets import interact, interactive, fixed, interact_manual, Layout, IntSlider
-            import ipywidgets as widgets
+        if is_interact():
+            try:
+                from ipywidgets import interact, interactive, fixed, interact_manual, Layout, IntSlider
+                import ipywidgets as widgets
 
-            interact(show_table,
-                     row_offset=IntSlider(
-                         max(0, len(output) - tail_r), 0, max(0, len(output) - tail_r), 1,
-                         layout=Layout(width='90%')
-                     ),
-                     column_offset=IntSlider(
-                         0, 0, max(0, len(output.columns) - tail_c), 1,
-                         layout=Layout(width='90%')
-                     )
-                     )
-        except:
+                interact(show_table,
+                         row_offset=IntSlider(
+                             max(0, len(output) - tail_r), 0, max(0, len(output) - tail_r), 1,
+                             layout=Layout(width='90%')
+                         ),
+                         column_offset=IntSlider(
+                             0, 0, max(0, len(output.columns) - tail_c), 1,
+                             layout=Layout(width='90%')
+                         )
+                         )
+            except:
+                show_table(len(output) - tail_r, 0)
+        else:
             show_table(len(output) - tail_r, 0)
 
     def display_scrollable_stats_table(stat):
@@ -374,17 +391,20 @@ def build_plots_jupyter(output, stat_global, stat_per_asset):
                 display(stat[offset:offset+tail])
             except:
                 log_info(stat[offset:offset + tail])
-        try:
-            from ipywidgets import interact, interactive, fixed, interact_manual, Layout, IntSlider
-            import ipywidgets as widgets
+        if is_interact():
+            try:
+                from ipywidgets import interact, interactive, fixed, interact_manual, Layout, IntSlider
+                import ipywidgets as widgets
 
-            interact(show_table,
-                     offset=IntSlider(
-                         max(0, len(stat)-tail), 0, max(0, len(stat)-tail), 1,
-                         layout=Layout(width='90%')
-                     )
-                     )
-        except:
+                interact(show_table,
+                         offset=IntSlider(
+                             max(0, len(stat)-tail), 0, max(0, len(stat)-tail), 1,
+                             layout=Layout(width='90%')
+                         )
+                         )
+            except:
+                show_table(len(stat)-tail)
+        else:
             show_table(len(stat)-tail)
 
     def show_asset_stat(asset):
@@ -401,14 +421,17 @@ def build_plots_jupyter(output, stat_global, stat_per_asset):
         make_major_plots(stat)
         log_info("---")
 
-    try:
-        from ipywidgets import interact, interactive, fixed, interact_manual
-        import ipywidgets as widgets
+    if is_interact():
+        try:
+            from ipywidgets import interact, interactive, fixed, interact_manual
+            import ipywidgets as widgets
 
-        log_info("Select the asset (or leave blank to display the overall stats):")
-        interact(show_asset_stat, asset=widgets.Combobox(options=[''] + output.asset.values.tolist()))
-    except:
-        show_asset_stat(output.asset.values.tolist()[0])
+            log_info("Select the asset (or leave blank to display the overall stats):")
+            interact(show_asset_stat, asset=widgets.Combobox(options=[''] + output.asset.values.tolist()))
+        except:
+            show_asset_stat('')
+    else:
+        show_asset_stat('')
 
 
 if __name__ == '__main__':

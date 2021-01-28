@@ -2,6 +2,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import gzip
+
 from qnt.log import log_info, log_err
 
 
@@ -42,7 +43,7 @@ def clean(output, data, kind=None):
     """
     import qnt.stats as qns
     import qnt.exposure as qne
-    from qnt.data.common import ds, f
+    from qnt.data.common import ds, f, track_event
 
     if kind is None:
         kind = data.name
@@ -79,6 +80,7 @@ def clean(output, data, kind=None):
             output = normalize(output)
         else:
             log_info("Ok.")
+        track_event("OUTPUT_CLEAN")
 
     if kind == 'stocks_long':
         log_info("Check positive positions...")
@@ -121,7 +123,7 @@ def check(output, data, kind=None):
     :return:
     """
     import qnt.stats as qns
-    from qnt.data.common import ds, f, get_env
+    from qnt.data.common import ds, f, get_env, track_event
 
     if kind is None:
         kind = data.name
@@ -146,6 +148,7 @@ def check(output, data, kind=None):
                 log_err("ERROR! Some dates were missed.")
             else:
                 log_info("Ok.")
+            track_event("OUTPUT_CHECK")
 
         if kind == "stocks" or kind == "stocks_long":
             log_info("Check exposure...")
@@ -186,7 +189,8 @@ def check(output, data, kind=None):
                     log_info("Ok.")
 
             rr = qns.calc_relative_return(data, output)
-            sr = qns.calc_sharpe_ratio_annualized(rr, max_periods=qns.get_default_is_period_for_type(kind))
+            start_date = qns.get_default_is_start_date_for_type(kind)
+            sr = qns.calc_sharpe_ratio_annualized(rr.sel(time=slice(start_date, None)))
             sr = sr.isel(time=-1).values
             log_info("Check sharpe ratio.")
             if sr < 1:
@@ -207,7 +211,7 @@ def write(output):
     :param output: xarray with daily weights
     """
     import qnt.data.id_translation as idt
-    from qnt.data.common import ds, get_env
+    from qnt.data.common import ds, get_env, track_event
     output = output.copy()
     output.coords[ds.ASSET] = [idt.translate_user_id_to_server_id(id) for id in output.coords[ds.ASSET].values]
     output = normalize(output)
@@ -217,3 +221,4 @@ def write(output):
     log_info("Write output: " + path)
     with open(path, 'wb') as out:
         out.write(data)
+    track_event("OUTPUT_WRITE")

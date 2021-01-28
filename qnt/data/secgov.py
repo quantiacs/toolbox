@@ -23,12 +23,8 @@ def load_forms(
     :param tail: datetime.timedelta, tail size of data. min_date = max_date - tail
     :return: generator
     """
+    track_event("DATA_SECGOV_FORMS")
     max_date = parse_date(max_date)
-    if MAX_DATE_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATE_LIMIT, max_date)
-        else:
-            max_date = MAX_DATE_LIMIT
 
     if min_date is not None:
         min_date = parse_date(min_date)
@@ -80,12 +76,8 @@ def load_facts(
     :param tail: datetime.timedelta, tail size of data. min_date = max_date - tail
     :return: generator
     """
+    track_event("DATA_SECGOV_FACTS")
     max_date = parse_date(max_date)
-    if MAX_DATE_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATE_LIMIT, max_date)
-        else:
-            max_date = MAX_DATE_LIMIT
 
     if min_date is not None:
         min_date = parse_date(min_date)

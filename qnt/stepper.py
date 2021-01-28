@@ -1,3 +1,4 @@
+from qnt.log import log_info, log_err
 import time
 import pandas as pd
 import xarray as xr
@@ -5,7 +6,10 @@ import numpy as np
 
 from .data import load_data, f, ds, write_output
 from .stats import calc_non_liquid
-from qnt.log import log_info, log_err
+
+
+log_err("qnt.stepper is deprecated and will be removed. see qnt.backtester")
+
 
 class SimpleStrategy:
     init_data_length = 0 # optional - data length for init

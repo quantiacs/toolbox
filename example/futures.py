@@ -10,7 +10,7 @@ ds = qndata.load_futures_list()
 print(ds)
 
 
-ds = qndata.load_futures_data(forward_order=True)
+ds = qndata.load_futures_data(max_date='2021-01-02', forward_order=True)
 
 o = xr.ones_like(ds.sel(field='open'))
 

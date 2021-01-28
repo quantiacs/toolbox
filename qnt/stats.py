@@ -1,4 +1,5 @@
 from .data import f, ds, stocks_load_list, get_env
+from .data.common import track_event
 from .output import normalize as output_normalize
 from qnt.log import log_info, log_err
 import xarray as xr
@@ -59,6 +60,7 @@ def calc_relative_return(data, portfolio_history,
         roll_slippage_factor = get_default_slippage(data)
 
     target_weights = portfolio_history.shift(**{ds.TIME: 1})[1:]  # shift and cut first point
+    min_time = target_weights.coords[ds.TIME].min()
 
     slippage = calc_slippage(data, 14, slippage_factor, points_per_year=points_per_year)
     roll_slippage = calc_slippage(data, 14, roll_slippage_factor, points_per_year=points_per_year)
@@ -92,7 +94,7 @@ def calc_relative_return(data, portfolio_history,
                                                   ROLL.values if ROLL is not None else None,
                                                   ROLL_SLIPPAGE.values if ROLL_SLIPPAGE is not None else None
                                                   )
-        return RR
+        return RR.loc[min_time:]
     else:
         RR = xr.DataArray(
             np.full([len(W.coords[ds.TIME])], np.nan, np.double),
@@ -105,7 +107,7 @@ def calc_relative_return(data, portfolio_history,
                                       ROLL_SLIPPAGE.values if ROLL_SLIPPAGE is not None else None
                                       )
         RR[:] = res
-        return RR
+        return RR.loc[min_time:]
 
 
 @numba.njit
@@ -582,13 +584,25 @@ def get_default_is_period(data):
 
 def get_default_is_period_for_type(name):
     if name == 'stocks' or name == 'stocks_long':
-        return int(get_env('IS_STOCKS', '1260', True))
+        return int(get_env('IS_STOCKS', '1512', True))
     if name == 'futures':
-        return int(get_env('IS_FUTURES', '1764', True))
+        return int(get_env('IS_FUTURES', '3528', True))
     if name == 'cryptofutures' or name == 'crypto_futures':
         return int(get_env('IS_CRYPTOFUTURES', '1764', True))
     if name == 'crypto':
         return int(get_env('IS_CRYPTO', '60000', True))
+    return None
+
+
+def get_default_is_start_date_for_type(name):
+    if name == 'stocks' or name == 'stocks_long':
+        return get_env('SD_STOCKS', '2015-01-01', True)
+    if name == 'futures':
+        return get_env('SD_FUTURES', '2006-01-01', True)
+    if name == 'cryptofutures' or name == 'crypto_futures':
+        return get_env('SD_CRYPTOFUTURES', '2014-01-01', True)
+    if name == 'crypto':
+        return get_env('SD_CRYPTO', '2014-01-01', True)
     return None
 
 
@@ -666,6 +680,8 @@ def calc_stat(data, portfolio_history,
     :param per_asset: calculate stats per asset
     :return: xarray with all statistics
     """
+    track_event("CALC_STAT")
+
     if points_per_year is None:
         points_per_year = calc_avg_points_per_year(data)
 
@@ -795,6 +811,7 @@ def calc_sector_distribution(portfolio_history, timeseries=None):
 
 def check_correlation(portfolio_history, data, print_stack_trace=True):
     """ Checks correlation for current output. """
+    track_event("CHECK_CORRELATION")
     portfolio_history = output_normalize(portfolio_history)
     rr = calc_relative_return(data, portfolio_history)
 
@@ -815,12 +832,12 @@ def check_correlation(portfolio_history, data, print_stack_trace=True):
         return
 
     log_err("WARNING! This strategy correlates with other strategies.")
-    log_info("The number of systems with a larger Sharpe ratio and correlation larger than 0.8:", len(cr_list))
+    log_info("The number of systems with a larger Sharpe ratio and correlation larger than 0.9:", len(cr_list))
     log_info("The max correlation value (with systems with a larger Sharpe ratio):", max([i['cofactor'] for i in cr_list]))
     my_cr = [i for i in cr_list if i['my']]
 
-    log_info("Current sharpe ratio(5y):",
-             calc_sharpe_ratio_annualized(rr, calc_avg_points_per_year(data) * 5)[-1].values.item())
+    log_info("Current sharpe ratio(3y):",
+             calc_sharpe_ratio_annualized(rr, calc_avg_points_per_year(data) * 3)[-1].values.item())
 
     log_info()
 

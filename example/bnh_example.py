@@ -33,7 +33,7 @@ assets = qndata.load_assets()
 
 data = qndata.load_data(
     # assets=[a['id'] for a in assets[-150:]],
-    # max_date='2020-03-01',
+    max_date='2020-03-01',
     tail=4*365,
     forward_order=True,
     dims=("time", "field", "asset"))

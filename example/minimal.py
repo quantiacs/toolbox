@@ -21,6 +21,6 @@ qnbk.backtest(
     competition_type="futures",
     load_data=load_data,
     lookback_period=365,
-    test_period=16*365,
+    start_date='2006-01-01',
     strategy=strategy
 )

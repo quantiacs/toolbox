@@ -6,6 +6,7 @@ def major_load_list():
     Loads major indexes list.
     :return:
     """
+    track_event("DATA_INDEX_MAJOR_META")
     uri = "major-idx/list"
     js = request_with_retry(uri, None)
     js = js.decode()
@@ -29,13 +30,8 @@ def major_load_data(
     :param forward_order:
     :return:
     """
+    track_event("DATA_INDEX_MAJOR_SERIES")
     max_date = parse_date(max_date)
-
-    if MAX_DATE_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATE_LIMIT, max_date)
-        else:
-            max_date = MAX_DATE_LIMIT
 
     if min_date is not None:
         min_date = parse_date(min_date)
@@ -78,13 +74,8 @@ def load_list(
     Loads index list
     :return:
     """
+    track_event("DATA_INDEX_META")
     max_date = parse_date(max_date)
-
-    if MAX_DATE_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATE_LIMIT, max_date)
-        else:
-            max_date = MAX_DATE_LIMIT
 
     if min_date is not None:
         min_date = parse_date(min_date)
@@ -124,13 +115,8 @@ def load_data(
     :param tail:
     :return:
     """
+    track_event("DATA_INDEX_SERIES")
     max_date = parse_date(max_date)
-
-    if MAX_DATE_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATE_LIMIT, max_date)
-        else:
-            max_date = MAX_DATE_LIMIT
 
     if min_date is not None:
         min_date = parse_date(min_date)

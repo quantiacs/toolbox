@@ -8,18 +8,13 @@ def load_data(
         forward_order: bool = True,
         tail: tp.Union[datetime.timedelta, int, float] = DEFAULT_TAIL
 ) -> tp.Union[None, xr.DataArray]:
+    track_event("DATA_CRYPTO")
     if max_date is None and "LAST_DATA_PATH" in os.environ:
         whole_data_file_flag_name = get_env("LAST_DATA_PATH", "last_data.txt")
         with open(whole_data_file_flag_name, "w") as text_file:
             text_file.write("last")
 
     max_date = parse_date_and_hour(max_date)
-
-    if MAX_DATETIME_LIMIT is not None:
-        if max_date is not None:
-            max_date = min(MAX_DATETIME_LIMIT, max_date)
-        else:
-            max_date = MAX_DATETIME_LIMIT
 
     if min_date is not None:
         min_date = parse_date_and_hour(min_date)

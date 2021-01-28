@@ -9,7 +9,7 @@ from qnt.stepper import test_strategy
 import xarray.ufuncs as xrf
 import datetime as dt
 
-data = qndata.load_cryptocurrency_data(tail=dt.timedelta(days=252), max_date=None, dims=("time", "field", "asset"),
+data = qndata.load_cryptocurrency_data(tail=dt.timedelta(days=252), max_date='2020-01-01T10', dims=("time", "field", "asset"),
                                        forward_order=True).sel(asset=['BTC'])
 
 print(qnstats.calc_avg_points_per_year(data))

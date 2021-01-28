@@ -9,8 +9,11 @@ from qnt.stepper import test_strategy
 import xarray.ufuncs as xrf
 import datetime as dt
 
-data = qndata.cryptofutures_load_data(tail=dt.timedelta(days=10*365), max_date=None, dims=("time", "field", "asset"),
-                                       forward_order=True)
+data = qndata.cryptofutures_load_data(
+    tail=dt.timedelta(days=10*365),
+    max_date=None,
+    dims=("time", "field", "asset"),
+    forward_order=True)
 
 print(data.sel(asset='BTC').to_pandas())
 
