@@ -51,6 +51,14 @@ def backtest(*,
     log_info("Run last pass...")
     print("Load data...")
     data = load_data(lookback_period)
+    try:
+        if data.name == 'stocks' and (competition_type != 'stocks' or competition_type != 'stocks_long')\
+            or data.name == 'cryptofutures' and (competition_type != 'cryptofutures' or competition_type != 'crypto_futures')\
+            or data.name == 'crypto' and competition_type != 'crypto'\
+            or data.name == 'futures' and competition_type != 'futures':
+            log_err("WARNING! The data type and the competition type are mismatch.")
+    except:
+        pass
     data, time_series = extract_time_series(data)
     print("Run pass...")
     result = strategy(data)
@@ -159,7 +167,7 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
 
 def standard_window(data, max_date: np.datetime64, lookback_period:int):
     min_date = max_date - np.timedelta64(lookback_period,'D')
-    return data.loc[dict(time=slice(min_date, max_date))]
+    return data.loc[dict(time=slice(min_date, max_date))].copy(True)
 
 
 def extract_time_series(data):

@@ -6,7 +6,7 @@ import qnt.backtester as qnbk
 
 
 def load_data(period):
-    data = qndata.futures_load_data(tail=period)
+    data = qndata.cryptofutures.load_data(tail=period)
     return data
 
 
@@ -18,9 +18,10 @@ def strategy(data):
 
 
 qnbk.backtest(
-    competition_type="futures",
+    competition_type="cryptofutures",
     load_data=load_data,
     lookback_period=365,
-    start_date='2006-01-01',
-    strategy=strategy
+    start_date='2014-01-01',
+    strategy=strategy,
+    build_plots=False
 )

@@ -68,7 +68,7 @@ BASE_URL = get_env('DATA_BASE_URL', 'https://data-api.quantiacs.io/')
 
 def request_with_retry(uri, data):
     url = urljoin(BASE_URL, uri)
-    cached = cache_get(uri, data)
+    cached = cache_get(url, data)
     if cached is not None:
         return cached
     retries = sys.maxsize if "SUBMISSION_ID" in os.environ else 5
@@ -98,7 +98,7 @@ def request_with_retry(uri, data):
                 response_body = buf.getvalue()
                 if response.getheader('Content-Encoding') == 'gzip':
                     response_body = gzip.decompress(response_body)
-                cache_put(response_body, uri, data)
+                cache_put(response_body, url, data)
                 return response_body
         except KeyboardInterrupt:
             raise
@@ -126,7 +126,6 @@ def parse_tail(tail: tp.Union[datetime.timedelta, int]):
 
 
 def parse_date_and_hour(dt: tp.Union[None, str, datetime.datetime, datetime.date]) -> datetime.datetime:
-    print(dt)
     if dt is None:
         res = datetime.datetime.now()
     else:
@@ -175,6 +174,7 @@ def deprecated_wrap(origin):
 
 CACHE_RETENTION = datetime.timedelta(days=float(get_env('CACHE_RETENTION', '7')))
 CACHE_DIR = get_env('CACHE_DIR', 'data-cache')
+
 
 def cache_get(*args):
     crop_cache()
@@ -240,7 +240,6 @@ if api_key != 'default':
         exit(1)
     else:
         url = tracking_host + "/auth/system/account/accountByKey?apiKey=" + api_key
-        print(url)
         try:
             resp = urllib.request.urlopen(url)
         except urllib.error.HTTPError as e:

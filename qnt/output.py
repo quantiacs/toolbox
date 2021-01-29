@@ -162,45 +162,69 @@ def check(output, data, kind=None):
                 log_info("Ok.")
 
         if not single_day:
-            # if kind == 'crypto' or kind == 'cryptofutures' or kind == 'crypto_futures':
-            #     log_info("Check holding time...")
-            #     ht = qns.calc_avg_holding_time(output)
-            #     ht = ht.isel(time=-1).values
-            #     if ht < 4:
-            #         log_err("ERROR! The holding time is too low.", ht, "<", 4)
-            #     else:
-            #         log_info("Ok.")
-            #
-            # if kind == 'stocks_long':
-            #     log_info("Check holding time...")
-            #     ht = qns.calc_avg_holding_time(output)
-            #     ht = ht.isel(time=-1).values
-            #     if ht < 15:
-            #         log_err("ERROR! The holding time is too low.", ht, "<", 15)
-            #     else:
-            #         log_info("Ok.")
+            if abs(output).sum() == 0:
+                log_err("ERROR! Output is empty.")
+            else:
+                # if kind == 'crypto' or kind == 'cryptofutures' or kind == 'crypto_futures':
+                #     log_info("Check holding time...")
+                #     ht = qns.calc_avg_holding_time(output)
+                #     ht = ht.isel(time=-1).values
+                #     if ht < 4:
+                #         log_err("ERROR! The holding time is too low.", ht, "<", 4)
+                #     else:
+                #         log_info("Ok.")
+                #
+                # if kind == 'stocks_long':
+                #     log_info("Check holding time...")
+                #     ht = qns.calc_avg_holding_time(output)
+                #     ht = ht.isel(time=-1).values
+                #     if ht < 15:
+                #         log_err("ERROR! The holding time is too low.", ht, "<", 15)
+                #     else:
+                #         log_info("Ok.")
 
-            if kind == 'stocks_long':
-                log_info("Check positive positions...")
-                neg = output.where(output < 0).dropna(ds.TIME, 'all')
-                if len(neg.time) > 0:
-                    log_err("ERROR! Output contains negative positions")
+                if kind == 'stocks_long':
+                    log_info("Check positive positions...")
+                    neg = output.where(output < 0).dropna(ds.TIME, 'all')
+                    if len(neg.time) > 0:
+                        log_err("ERROR! Output contains negative positions")
+                    else:
+                        log_info("Ok.")
+
+                log_info("Check the sharpe ratio...")
+
+                start_date = qns.get_default_is_start_date_for_type(kind)
+                sdd = pd.Timestamp(start_date)
+                osd = pd.Timestamp(output.where(abs(output).sum('asset') > 0).dropna('time').time.min().values)
+                dsd = pd.Timestamp(data.time.min().values)
+                if (dsd - sdd).days > 7:
+                    log_err("WARNING! There are not enough points in the data.\n"
+                            "The first data point(" + str(dsd.date()) + ") should be earlier than " + str(sdd.date()))
+                else:
+                    if len(data.sel(time=slice(None, sdd)).time) < 15:
+                        log_err("WARNING! There are not enough points in the data for the slippage calculation.\n"
+                                "Add 15 extra data points to the data head.")
+                if (osd - sdd).days > 7:
+                    log_err("WARNING! There are not enough points in the output.\n"
+                            "The output series should start from " + str(sdd.date()) + " or earlier instead of " + str(osd.date()))
+                sd = max(sdd, dsd)
+                sd = sd.to_pydatetime()
+                fd = pd.Timestamp(data.time.max().values).to_pydatetime()
+                log_info("Period: " + str(sd.date()) + " - " + str(fd.date()))
+
+                output_slice = align(output, data.time, sd, fd)
+                rr = qns.calc_relative_return(data, output_slice)
+                sr = qns.calc_sharpe_ratio_annualized(rr)
+                sr = sr.isel(time=-1).values
+                log_info("Sharpe Ratio =", sr)
+
+                if sr < 1:
+                    log_err("ERROR! The sharpe ratio is too low.", sr, '<', 1)
                 else:
                     log_info("Ok.")
 
-            rr = qns.calc_relative_return(data, output)
-            start_date = qns.get_default_is_start_date_for_type(kind)
-            sr = qns.calc_sharpe_ratio_annualized(rr.sel(time=slice(start_date, None)))
-            sr = sr.isel(time=-1).values
-            log_info("Check sharpe ratio.")
-            if sr < 1:
-                log_err("ERROR! The sharpe ratio is too low.", sr, '<', 1)
-            else:
-                log_info("Ok.")
-
-            log_info("Check correlation.")
-            qns.check_correlation(output, data, False)
-
+                log_info("Check correlation.")
+                qns.check_correlation(output, data, False)
     except Exception as e:
         log_err(e)
 
@@ -222,3 +246,23 @@ def write(output):
     with open(path, 'wb') as out:
         out.write(data)
     track_event("OUTPUT_WRITE")
+
+
+def align(output, time_coord, start=None, end=None):
+    """
+    Normalizes, aligns the output with the data and cut the piece.
+    It is necessary for precise Sharpe ratio calculation.
+    :param output: the output array
+    :param time_coord: the time coord for align
+    :param start: start date
+    :param end: end date
+    :return: aligned and cut output
+    """
+    res = normalize(output)
+    res = res.broadcast_like(time_coord)
+    res = res.fillna(0)
+    if start is not None:
+        res = res.sel(time=slice(start, None))
+    if end is not None:
+        res = res.sel(time=slice(None, end))
+    return res

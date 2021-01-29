@@ -354,8 +354,6 @@ def calc_mean_return_annualized(relative_return, max_periods=None, min_periods=1
     """
     if points_per_year is None:
         points_per_year = calc_avg_points_per_year(relative_return)
-    if max_periods is None:
-        max_periods = (points_per_year * 5) if points_per_year == 252 else (points_per_year * 7)
     power = func_np_to_xr(np.power)
     return power(calc_mean_return(relative_return, max_periods, min_periods, points_per_year=points_per_year) + 1,
                  points_per_year) - 1

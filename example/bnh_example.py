@@ -31,7 +31,7 @@ import qnt.exposure as qne
 
 assets = qndata.load_assets()
 
-data = qndata.load_data(
+data = qndata.futures.load_data(
     # assets=[a['id'] for a in assets[-150:]],
     max_date='2020-03-01',
     tail=4*365,
@@ -70,3 +70,25 @@ output = output.dropna('time', 'all')
 #
 #
 #
+
+#align test
+import qnt.output as qnout
+import qnt.stats as qns
+
+data = qndata.futures_load_data(min_date='2005-12-10')
+print("---\n", data.time[0].values)
+
+output = xr.ones_like(data.sel(field=qndata.f.CLOSE))
+
+qnout.check(output, data)
+
+output_slice = output.sel(time=slice('2015-12-01',None))
+rr = qns.calc_relative_return(data, output_slice)
+sr = qns.calc_sharpe_ratio_annualized(rr)
+print(rr.time[0].values, sr.isel(time=-1).values)
+
+
+output_slice = qnout.align(output_slice, data.time, '2009-01-01')
+rr = qns.calc_relative_return(data, output_slice)
+sr = qns.calc_sharpe_ratio_annualized(rr)
+print(rr.time[0].values, sr.isel(time=-1).values)
