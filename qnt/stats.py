@@ -1,4 +1,4 @@
-from .data import f, ds, stocks_load_list, get_env
+from .data import f, ds, stocks_load_list, get_env, futures_load_list
 from .data.common import track_event
 from .output import normalize as output_normalize
 from qnt.log import log_info, log_err
@@ -59,7 +59,8 @@ def calc_relative_return(data, portfolio_history,
     if roll_slippage_factor is None:
         roll_slippage_factor = get_default_slippage(data)
 
-    target_weights = portfolio_history.shift(**{ds.TIME: 1})[1:]  # shift and cut first point
+    target_weights = portfolio_history.shift(**{ds.TIME: 1}) # shift
+    target_weights[{ds.TIME: 0}] = 0
     min_time = target_weights.coords[ds.TIME].min()
 
     slippage = calc_slippage(data, 14, slippage_factor, points_per_year=points_per_year)
@@ -536,7 +537,7 @@ def calc_holding_log_np_nb(weights: np.ndarray) -> np.ndarray:  # , equity: np.n
 def calc_non_liquid(data, portfolio_history):
     (adj_data, adj_ph) = arrange_data(data, portfolio_history, False)
     if f.IS_LIQUID in adj_data.coords[ds.FIELD]:
-        non_liquid = adj_ph.where(adj_data.loc[f.IS_LIQUID].fillna(0) == 0)
+        non_liquid = adj_ph.where(adj_data.loc[f.IS_LIQUID] == 0)
     else:
         non_liquid = xr.full_like(adj_data.loc[f.CLOSE], np.nan)
     non_liquid = non_liquid.where(abs(non_liquid) > 0)
@@ -744,10 +745,11 @@ def calc_stat(data, portfolio_history,
     return stat.transpose(*dims)
 
 
-def calc_sector_distribution(portfolio_history, timeseries=None):
+def calc_sector_distribution(portfolio_history, timeseries=None, kind=None):
     """
     :param portfolio_history: portfolio weights set for every day
     :param timeseries: time range
+    :param kind: 'stocks' or 'futures'
     :return: sector distribution
     """
     ph = abs(portfolio_history.transpose(ds.TIME, ds.ASSET)).fillna(0)
@@ -769,7 +771,15 @@ def calc_sector_distribution(portfolio_history, timeseries=None):
     max_date = str(portfolio_history.coords[ds.TIME].max().values)[0:10]
     min_date = str(portfolio_history.coords[ds.TIME].min().values)[0:10]
 
-    assets = stocks_load_list(min_date=min_date, max_date=max_date)
+    if kind is None:
+        kind = portfolio_history.name
+    if kind == 'stocks' or kind == 'stocks_long':
+        assets = stocks_load_list(min_date=min_date, max_date=max_date)
+    elif kind == 'futures':
+        assets = futures_load_list()
+    else:
+        assets = []
+
     assets = dict((a['id'], a) for a in assets)
 
     sectors = []

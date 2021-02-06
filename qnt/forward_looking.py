@@ -10,6 +10,9 @@ FORWARD_LOOKING_TEST_OFFSET = 182
 FORWARD_LOOKING_TEST_DELTA = 10 ** -7
 
 
+log_err("qnt.forward_looking is deprecated and will be removed. see qnt.backtester")
+
+
 def load_data_calc_output_and_check_forward_looking(strategy):
     """
     :param strategy: function with data loading and output calculation

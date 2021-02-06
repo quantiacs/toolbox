@@ -1,6 +1,6 @@
 package:
   name: "qnt"
-  version: "0.0.217"
+  version: "0.0.221"
 
 source:
   path: .
@@ -34,4 +34,4 @@ requirements:
 
 about:
   license: MIT
-  home: https://quantiacs.io
+  home: https://quantiacs.com

@@ -61,7 +61,7 @@ def clean(output, data, kind=None):
         if len(non_liquid.coords[ds.TIME]) > 0:
             log_info("ERROR! Strategy trades non-liquid assets.")
             log_info("Fix liquidity...")
-            output = output.where(data.sel(field=f.IS_LIQUID).fillna(0) > 0).fillna(0)
+            output = xr.where(data.sel(field=f.IS_LIQUID) == 0, 0, output)
         log_info("Ok.")
 
     if not single_day:
@@ -109,6 +109,13 @@ def clean(output, data, kind=None):
             output=output.sel(asset=['BTC'])
         else:
             log_info("Ok.")
+
+    print("ffill if the current price is None...")
+    if not single_day:
+        output = output.fillna(0)
+        output = output.where(np.isfinite(data.sel(field='close')))
+        output = output.ffill('time')
+        output = output.fillna(0)
 
     log_info("Normalization...")
     output = normalize(output)
