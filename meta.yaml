@@ -1,23 +1,22 @@
 package:
   name: "qnt"
-  version: "0.0.221"
+  version: "0.0.225"
 
 source:
   path: .
 
 build:
-  noarch: generic
+  noarch: python
   number: 0
   script: "{{ PYTHON }} -m pip install . --no-deps --ignore-installed -vvv "
 
 requirements:
   host:
   - pip
-  - python=3.7.*
+  - python >=3.7,<3.8
   - setuptools
 
   run:
-    - python=3.7.*
     - scipy>=1.4.1
     - pandas=>1.0.1
     - xarray>=0.16.0
@@ -25,7 +24,7 @@ requirements:
     - numpy>=1.18
     - numba=0.47
     - tabulate>=0.8.3
-    - python>=3.7
+    - python >=3.7,<3.8
     - progressbar2=3.37
   #  - conda-forge::dash=1.8.*
   #  - conda-forge::python-avro=1.8.*
