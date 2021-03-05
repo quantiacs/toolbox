@@ -11,7 +11,7 @@ import qnt.output as qnout
 import qnt.data as qndata
 import qnt.data.common as qndc
 import qnt.stats as qnstat
-from qnt.graph import is_notebook, make_major_plots
+from qnt.graph import is_notebook, make_major_plots, is_interact
 from qnt.log import log_info, log_err
 
 
@@ -20,8 +20,8 @@ DataSet = tp.Union[xr.DataArray,dict]
 
 def backtest(*,
              competition_type: str,
-             load_data: tp.Callable[[int], tp.Union[DataSet,tp.Tuple[DataSet,np.ndarray]]],
              strategy: tp.Callable[[DataSet], xr.DataArray],
+             load_data: tp.Union[tp.Callable[[int], tp.Union[DataSet,tp.Tuple[DataSet,np.ndarray]]],None] = None,
              lookback_period: int = 365,
              test_period: int = 365*15,
              start_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
@@ -45,8 +45,12 @@ def backtest(*,
     :return:
     """
     qndc.track_event("BACKTEST")
+
     if window is None:
         window = standard_window
+
+    if load_data is None:
+        load_data = lambda tail: qndata.load_data_by_type(competition_type, tail=tail)
 
     log_info("Run last pass...")
     print("Load data...")
@@ -149,9 +153,11 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
             if type(output) != xr.DataArray:
                 log_err("Output is not xarray!")
                 return
-            if output.dims != (qndata.ds.ASSET,):
-                log_err("Wrong output dimensions. ", output.dims, "is not", (qndata.ds.ASSET,))
+            if set(output.dims) != {'asset'} and set(output.dims) != {'asset', 'time'}:
+                log_err("Wrong output dimensions. ", output.dims, "Should contain only:", {'asset', 'time'})
                 return
+            if 'time' in output.dims:
+                output = output.sel(time=t)
             output = output.drop('time', errors='ignore')
             outputs.append(output)
             i += 1
@@ -181,8 +187,6 @@ def is_submitted():
     return os.environ.get("SUBMISSION_ID", "") != ""
 
 
-def is_interact():
-    return 'NONINTERACT' not in os.environ
 
 
 def analyze_results(output, data, kind, build_plots):
@@ -348,7 +352,7 @@ def build_plots_dash(output, stat_global, stat_per_asset):
         from threading import Timer
         Timer(1, lambda: webbrowser.open("http://127.0.0.1:"+os.environ.get('PORT', '8050'), new=2)).start()
 
-        app.run_server()
+        app.run_server(dev_tools_hot_reload=False)
     except:
         import logging
         logging.exception("can't start dash")
@@ -409,7 +413,7 @@ def build_plots_jupyter(output, stat_global, stat_per_asset):
                              max(0, len(stat)-tail), 0, max(0, len(stat)-tail), 1,
                              layout=Layout(width='90%')
                          )
-                         )
+                    )
             except:
                 show_table(len(stat)-tail)
         else:

@@ -8,7 +8,7 @@ rm -rfv qnt-*
 rm -rfv *.gz
 rm -rfv *.csv
 
-conda-build .
+conda-build . --no-include-recipe
 
 PKG=`conda-build .  --output`
 

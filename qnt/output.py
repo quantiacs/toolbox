@@ -54,6 +54,12 @@ def clean(output, data, kind=None):
     if single_day:
         output = output.drop(ds.TIME, errors='ignore')
         output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))
+    else:
+        log_info("ffill if the current price is None...")
+        output = output.fillna(0)
+        output = output.where(np.isfinite(data.sel(field='close')))
+        output = output.ffill('time')
+        output = output.fillna(0)
 
     if kind == "stocks" or kind == "stocks_long":
         log_info("Check liquidity...")
@@ -109,13 +115,6 @@ def clean(output, data, kind=None):
             output=output.sel(asset=['BTC'])
         else:
             log_info("Ok.")
-
-    print("ffill if the current price is None...")
-    if not single_day:
-        output = output.fillna(0)
-        output = output.where(np.isfinite(data.sel(field='close')))
-        output = output.ffill('time')
-        output = output.fillna(0)
 
     log_info("Normalization...")
     output = normalize(output)

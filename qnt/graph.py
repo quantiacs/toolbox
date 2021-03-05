@@ -2,6 +2,11 @@ import plotly.offline as ply
 import plotly.graph_objs as go
 import math
 import logging
+import os
+
+
+def is_interact():
+    return 'NONINTERACT' not in os.environ
 
 
 def is_notebook():

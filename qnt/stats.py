@@ -883,13 +883,18 @@ def calc_correlation(relative_returns, suppress_exception=True):
         rr = base64.b64encode(rr)
         rr = rr.decode()
 
-        r = {"relative_returns": rr, "submission_ids": submission_ids}
-        r = json.dumps(r)
-        r = r.encode()
+        cofactors = []
 
-        with request.urlopen(STATAN_CORRELATION_URL, r) as response:
-            cofactors = response.read()
-            cofactors = json.loads(cofactors)
+        chunks = [submission_ids[x:x+50] for x in range(0, len(submission_ids), 50)]
+
+        for c in chunks:
+            r = {"relative_returns": rr, "submission_ids": c}
+            r = json.dumps(r)
+            r = r.encode()
+            with request.urlopen(STATAN_CORRELATION_URL, r) as response:
+                cs = response.read()
+                cs = json.loads(cs)
+                cofactors = cofactors + cs
 
         result = []
         for c in cofactors:
@@ -897,7 +902,6 @@ def calc_correlation(relative_returns, suppress_exception=True):
             sub['cofactor'] = c['cofactor']
             sub['sharpe_ratio'] = c['sharpe_ratio']
             result.append(sub)
-
         return result
     except Exception as e:
         log_err("WARNING! Can't calculate correlation.")
