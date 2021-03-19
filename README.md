@@ -1,3 +1,5 @@
+# README
+
 You can use the Quantiacs library (QNT) for developing locally trading strategies on your computer.
 
 You can follow these easy steps and create an isolated environment on your machine using conda for managing dependencies and avoiding conflicts:
