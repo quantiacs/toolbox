@@ -1,16 +1,16 @@
-QNT library for strategies development.
+You can use the Quantiacs library (QNT) for developing locally trading strategies on your computer.
 
-You can use this library on your PC.
-For this purpose, do these steps: 
+You can follow these easy steps and create an isolated environment on your machine using conda for managing dependencies and avoiding conflicts:
 
-1 . Install anaconda (v2020.02 is recommended): https://www.anaconda.com/products/individual
+1 . Install anaconda (v2020.02 is recommended): https://www.anaconda.com/products/individual or https://repo.anaconda.com/archive/.
 
-2 . Create an isolated environment for strategies development:
+
+2. Create an isolated environment for developing strategies and install the QNT library together with needed dependencies:
 ```bash
-conda create -n qntdev quantiacs-source::qnt conda-forge::ta-lib conda-forge::dash=1.18
+conda create -n qntdev quantiacs-source::qnt conda-forge::ta-lib conda-forge::dash=1.18 python=3.7
 ```
 
-Then set your API key. You can find it in your profile on https://quantiacs.io .
+Then set your API key. You can find it in your profile on https://quantiacs.com .
 ```bash
 conda env config vars set -n qntdev API_KEY={your_api_key_here}
 ```
@@ -19,7 +19,11 @@ conda env config vars set -n qntdev API_KEY={your_api_key_here}
 ```bash
 conda activate qntdev
 ```
-You should use this command to reactivate the isolated environment.
+For leaving the environment:
+```bash
+conda deactivate
+```
+Each time you want to use the QNT library, reactivate the environment.
 
 4 . Develop your strategy. You can use this code as a starting point:
 
@@ -53,29 +57,29 @@ qnbk.backtest(
 )
 ```
 
-5 . Use this command to start your strategy:
+5 . Use this command to start your strategy (replace python with python3 if your default python version is 2):
 ```bash
-API_KEY='{your_api_key}' python3 strategy.py
+python strategy.py
 ```
 
 6 . When you finish with your strategy, you need to upload 
-your code the jupyter notebook on https://quantiacs.io .
+your code the jupyter notebook on https://quantiacs.com .
 
-You can copy and past your code in jupyter notebook. 
-Or you can upload your python file (strategy.py) and run it from jupyter notebook:
+You can copy and past your code in a jupyter notebook called strategy.ipynb. 
+Or you can upload your python file (strategy.py) and run it from a jupyter notebook called strategy.ipynb:
 ```python
 import strategy
 ```
 
 7 . Run all cells to test your strategy in the jupyter notebbok.
 
-https://quantiacs.io/personalpage/strategies
+https://quantiacs.com/personalpage/strategies
 
 Fix the errors if it is necessary.
 
 
 8 . Send your strategy to the Contest from the "Development" page.
 
-https://quantiacs.io/personalpage/strategies
+https://quantiacs.com/personalpage/strategies
 
 9 . Wait for your strategy pass filters and win the Contest.
