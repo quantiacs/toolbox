@@ -67,7 +67,7 @@ python strategy.py
 If you experience issues with the API key, prepend the following to your python file:
 ```bash
 import os
-os.environ['API_KEY'] = "{your_api_key_here}"  # you may need it for local 
+os.environ['API_KEY'] = "{your_api_key_here}"
 ```
 
 6 . When you finish with your strategy, you need to upload 
