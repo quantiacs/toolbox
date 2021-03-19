@@ -64,6 +64,12 @@ qnbk.backtest(
 python strategy.py
 ```
 
+If you experience issues with the API key, prepend the following to your python file:
+```bash
+import os
+os.environ['API_KEY'] = "{your_api_key_here}"  # you may need it for local 
+```
+
 6 . When you finish with your strategy, you need to upload 
 your code the jupyter notebook on https://quantiacs.com .
 
