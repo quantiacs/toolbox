@@ -248,6 +248,8 @@ def check(output, data, kind=None):
                 qns.check_correlation(output, data, False)
     except Exception as e:
         log_err(e)
+    ## Required to return Sharpe Ratio when running this in the loop and want to pick the optimal hyperparameters. Please feel free to mail me anshul96go@gmail.com and I can show you an example of where it is required.
+    return sr
 
 
 def write(output):
