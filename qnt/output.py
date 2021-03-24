@@ -3,7 +3,7 @@ import xarray as xr
 import pandas as pd
 import gzip
 
-from qnt.log import log_info, log_err
+from qnt.log import log_info, log_err, Settings as LogSettings
 
 
 def normalize(output, per_asset=False):
@@ -29,7 +29,7 @@ def normalize(output, per_asset=False):
     return output
 
 
-def clean(output, data, kind=None):
+def clean(output, data, kind=None, debug=True):
     """
     Checks the output and fix common errors:
         - liquidity
@@ -50,75 +50,83 @@ def clean(output, data, kind=None):
 
     output = output.drop(ds.FIELD, errors='ignore')
 
-    single_day = ds.TIME not in output.dims
-    if single_day:
-        output = output.drop(ds.TIME, errors='ignore')
-        output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))
-    else:
-        log_info("ffill if the current price is None...")
-        output = output.fillna(0)
-        output = output.where(np.isfinite(data.sel(field='close')))
-        output = output.ffill('time')
-        output = output.fillna(0)
+    with LogSettings(err2info=True):
+        log_info("Output cleaning...")
 
-    if kind == "stocks" or kind == "stocks_long":
-        log_info("Check liquidity...")
-        non_liquid = qns.calc_non_liquid(data, output)
-        if len(non_liquid.coords[ds.TIME]) > 0:
-            log_info("ERROR! Strategy trades non-liquid assets.")
-            log_info("Fix liquidity...")
-            output = xr.where(data.sel(field=f.IS_LIQUID) == 0, 0, output)
-        log_info("Ok.")
+        single_day = ds.TIME not in output.dims
 
-    if not single_day:
-        log_info("Check missed dates...")
-        missed_dates = qns.find_missed_dates(output, data)
-        if len(missed_dates) > 0:
-            log_info("WARNING! Output contain missed dates.")
-            log_info("Adding missed dates and set zero...")
-            add = xr.concat([output.isel(time=-1)] * len(missed_dates), pd.DatetimeIndex(missed_dates, name="time"))
-            add = xr.full_like(add, np.nan)
-            output = xr.concat([output, add], dim='time')
+        if not single_day:
+            track_event("OUTPUT_CLEAN")
+
+        if single_day:
+            output = output.drop(ds.TIME, errors='ignore')
+            output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))
+        else:
+            log_info("ffill if the current price is None...")
             output = output.fillna(0)
-            if kind == "stocks" or kind == "stocks_long":
-                output = output.where(data.sel(field='is_liquid') > 0)
-            output = output.dropna('asset', 'all').dropna('time', 'all').fillna(0)
-            output = normalize(output)
-        else:
-            log_info("Ok.")
-        track_event("OUTPUT_CLEAN")
+            output = output.where(np.isfinite(data.sel(field='close')))
+            output = output.ffill('time')
+            output = output.fillna(0)
 
-    if kind == 'stocks_long':
-        log_info("Check positive positions...")
-        neg = output.where(output < 0).dropna(ds.TIME, 'all')
-        if len(neg.time) > 0:
-            log_info("Output contains negative positions. Clean...")
-            output = output.where(output >= 0).fillna(0)
-        else:
+        if kind == "stocks" or kind == "stocks_long":
+            log_info("Check liquidity...")
+            non_liquid = qns.calc_non_liquid(data, output)
+            if len(non_liquid.coords[ds.TIME]) > 0:
+                log_info("WARNING! Strategy trades non-liquid assets.")
+                log_info("Fix liquidity...")
+                is_liquid = data.sel(field=f.IS_LIQUID)
+                is_liquid = xr.align(is_liquid, output, join='right')[0]
+                output = xr.where(is_liquid == 0, 0, output)
             log_info("Ok.")
 
-    if kind == "stocks" or kind == "stocks_long":
-        log_info("Check exposure...")
-        if not qns.check_exposure(output):
-            log_info("Cut big positions...")
-            output = qne.cut_big_positions(output)
+        if not single_day:
+            log_info("Check missed dates...")
+            missed_dates = qns.find_missed_dates(output, data)
+            if len(missed_dates) > 0:
+                log_info("WARNING! Output contain missed dates.")
+                log_info("Adding missed dates and set zero...")
+                add = xr.concat([output.isel(time=-1)] * len(missed_dates), pd.DatetimeIndex(missed_dates, name="time"))
+                add = xr.full_like(add, np.nan)
+                output = xr.concat([output, add], dim='time')
+                output = output.fillna(0)
+                if kind == "stocks" or kind == "stocks_long":
+                    output = output.where(data.sel(field='is_liquid') > 0)
+                output = output.dropna('asset', 'all').dropna('time', 'all').fillna(0)
+                output = normalize(output)
+            else:
+                log_info("Ok.")
+
+        if kind == 'stocks_long':
+            log_info("Check positive positions...")
+            neg = output.where(output < 0).dropna(ds.TIME, 'all')
+            if len(neg.time) > 0:
+                log_info("WARNING! Output contains negative positions. Clean...")
+                output = output.where(output >= 0).fillna(0)
+            else:
+                log_info("Ok.")
+
+        if kind == "stocks" or kind == "stocks_long":
             log_info("Check exposure...")
             if not qns.check_exposure(output):
-                log_info("Drop bad days...")
-                output = qne.drop_bad_days(output)
+                log_info("Cut big positions...")
+                output = qne.cut_big_positions(output)
+                log_info("Check exposure...")
+                if not qns.check_exposure(output):
+                    log_info("Drop bad days...")
+                    output = qne.drop_bad_days(output)
 
-    if kind == "crypto":
-        log_info("Check BTC...")
-        if output.where(output != 0).dropna("asset", "all").coords[ds.ASSET].values.tolist() != ['BTC']:
-            log_info("ERROR! Output contains not only BTC.")
-            log_info("Fixing...")
-            output=output.sel(asset=['BTC'])
-        else:
-            log_info("Ok.")
+        if kind == "crypto":
+            log_info("Check BTC...")
+            if output.where(output != 0).dropna("asset", "all").coords[ds.ASSET].values.tolist() != ['BTC']:
+                log_info("WARNING! Output contains not only BTC.")
+                log_info("Fixing...")
+                output=output.sel(asset=['BTC'])
+            else:
+                log_info("Ok.")
 
-    log_info("Normalization...")
-    output = normalize(output)
-    log_info("Done.")
+        log_info("Normalization...")
+        output = normalize(output)
+        log_info("Output cleaning is complete.")
 
     return output
 
@@ -144,6 +152,7 @@ def check(output, data, kind=None):
             non_liquid = qns.calc_non_liquid(data, output)
             if len(non_liquid.coords[ds.TIME]) > 0:
                 log_err("ERROR! Strategy trades non-liquid assets.")
+                log_err("Multiply the output by data.sel(field='is_liquid') or use qnt.output.clean")
             else:
                 log_info("Ok.")
 
@@ -151,25 +160,28 @@ def check(output, data, kind=None):
             log_info("Check missed dates...")
             missed_dates = qns.find_missed_dates(output, data)
             if len(missed_dates) > 0:
-                log_err("ERROR! Some dates were missed.")
+                log_err("ERROR! Some dates were missed)")
+                log_err("Your strategy dropped some days, your strategy should produce a continuous series.")
             else:
                 log_info("Ok.")
             track_event("OUTPUT_CHECK")
 
         if kind == "stocks" or kind == "stocks_long":
             log_info("Check exposure...")
-            qns.check_exposure(output)
+            if not qns.check_exposure(output):
+                log_err("Use more assets or/and use qnt.output.clean")
 
         if kind == "crypto":
             log_info("Check BTC...")
             if output.where(output != 0).dropna("asset", "all").coords[ds.ASSET].values.tolist() != ['BTC']:
-                log_err("ERROR! Output contains not only BTC.")
+                log_err("ERROR! Output contains not only BTC.\n")
+                log_err("Remove the other assets from the output or use qnt.output.clean")
             else:
                 log_info("Ok.")
 
         if not single_day:
             if abs(output).sum() == 0:
-                log_err("ERROR! Output is empty.")
+                log_err("ERROR! Output is empty. All positions are zero.")
             else:
                 # if kind == 'crypto' or kind == 'cryptofutures' or kind == 'crypto_futures':
                 #     log_info("Check holding time...")
@@ -193,7 +205,8 @@ def check(output, data, kind=None):
                     log_info("Check positive positions...")
                     neg = output.where(output < 0).dropna(ds.TIME, 'all')
                     if len(neg.time) > 0:
-                        log_err("ERROR! Output contains negative positions")
+                        log_err("ERROR! Output contains negative positions.")
+                        log_err("Drop all negative positions.")
                     else:
                         log_info("Ok.")
 
@@ -203,16 +216,17 @@ def check(output, data, kind=None):
                 sdd = pd.Timestamp(start_date)
                 osd = pd.Timestamp(output.where(abs(output).sum('asset') > 0).dropna('time').time.min().values)
                 dsd = pd.Timestamp(data.time.min().values)
-                if (dsd - sdd).days > 7:
-                    log_err("WARNING! There are not enough points in the data.\n"
-                            "The first data point(" + str(dsd.date()) + ") should be earlier than " + str(sdd.date()))
+                if (dsd - sdd).days > 10:
+                    log_err("WARNING! There are not enough points in the data")
+                    log_err("The first point(" + str(dsd.date()) + ") should be earlier than " + str(sdd.date()))
+                    log_err("Load data more historical data.")
                 else:
                     if len(data.sel(time=slice(None, sdd)).time) < 15:
-                        log_err("WARNING! There are not enough points in the data for the slippage calculation.\n"
-                                "Add 15 extra data points to the data head.")
+                        log_err("WARNING! There are not enough points in the data for the slippage calculation.")
+                        log_err("Add 15 extra data points to the data head (load data more historical data).")
                 if (osd - sdd).days > 7:
-                    log_err("WARNING! There are not enough points in the output.\n"
-                            "The output series should start from " + str(sdd.date()) + " or earlier instead of " + str(osd.date()))
+                    log_err("WARNING! There are not enough points in the output.")
+                    log_err("The output series should start from " + str(sdd.date()) + " or earlier instead of " + str(osd.date()))
                 sd = max(sdd, dsd)
                 sd = sd.to_pydatetime()
                 fd = pd.Timestamp(data.time.max().values).to_pydatetime()
@@ -225,7 +239,8 @@ def check(output, data, kind=None):
                 log_info("Sharpe Ratio =", sr)
 
                 if sr < 1:
-                    log_err("ERROR! The sharpe ratio is too low.", sr, '<', 1)
+                    log_err("ERROR! The Sharpe Ratio is too low.", sr, '<', 1,)
+                    log_err("Improve the strategy and make sure that the in-sample Sharpe Ratio more than 1.")
                 else:
                     log_info("Ok.")
 

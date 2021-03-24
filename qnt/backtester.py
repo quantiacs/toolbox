@@ -158,7 +158,7 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
                 return
             if 'time' in output.dims:
                 output = output.sel(time=t)
-            output = output.drop('time', errors='ignore')
+            output = output.drop(['field', 'time'], errors='ignore')
             outputs.append(output)
             i += 1
             p.update(i)

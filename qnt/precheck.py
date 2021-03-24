@@ -38,7 +38,6 @@ def run_init():
 
 
 def evaluate_passes(data_type='stocks', passes=3, dates=None):
-    in_sample_days = qnt.stats.get_default_is_period_for_type_calendar_days(data_type)
 
     log_info("Output directory is:", result_dir)
     os.makedirs(result_dir, exist_ok=True)
@@ -52,8 +51,8 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
 
     if dates is None:
         log_info("Prepare test dates...")
-        log_info(in_sample_days)
-        data = qnt.data.load_data_by_type(data_type, tail=in_sample_days)
+        min_date = (pd.Timestamp(qnt.stats.get_default_is_start_date_for_type(data_type))).to_pydatetime()
+        data = qnt.data.load_data_by_type(data_type, min_date=min_date)
         if 'is_liquid' in data.field:
             data = data.where(data.sel(field='is_liquid') > 0).dropna('time', 'all')
         data = data.time
@@ -212,11 +211,10 @@ def check_output(output, data_type='stocks'):
         log_err("Unsupported data_type", data_type)
         return
 
-    in_sample_days = qnt.stats.get_default_is_period_for_type_calendar_days(data_type)
     in_sample_points = qnt.stats.get_default_is_period_for_type(data_type)
 
-    min_date = np.datetime64(datetime.date.today() - datetime.timedelta(days=in_sample_days))
-    output_tail = output.where(output.time > min_date).dropna('time', 'all')
+    min_date = qnt.stats.get_default_is_start_date_for_type(data_type)
+    output_tail = output.where(output.time > np.datetime64(min_date)).dropna('time', 'all')
     if len(output_tail) < in_sample_points:
         log_err("ERROR! In sample period does not contain enough points. " +
                 str(len(output_tail)) + " < " + str(in_sample_points))
@@ -226,7 +224,9 @@ def check_output(output, data_type='stocks'):
     log_info()
 
     log_info("Load data...")
-    data = qnt.data.load_data_by_type(data_type, assets=output.asset.values.tolist(), tail=in_sample_days + 60)
+
+    data = qnt.data.load_data_by_type(data_type, assets=output.asset.values.tolist(),
+                                      min_date=(pd.Timestamp(min_date) - pd.Timedelta(days=60)).to_pydatetime())
 
     log_info()
 

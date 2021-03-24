@@ -1,6 +1,6 @@
 import numpy as np
 import numba as nb
-import qnt.ta.ndadapter as nda
+from qnt.ta.ndadapter import NdType
 from qnt.ta.shift import shift, shift_np_1d
 
 
@@ -10,6 +10,6 @@ def change_np_1d(series: np.ndarray, periods: int) -> np.ndarray:
     return series - shifted
 
 
-def change(series: np.ndarray, periods: int = 1) -> np.ndarray:
+def change(series: NdType, periods: int = 1) -> np.ndarray:
     shifted = shift(series, periods)
     return series - shifted

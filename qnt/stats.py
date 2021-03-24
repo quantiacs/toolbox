@@ -605,15 +605,6 @@ def get_default_is_start_date_for_type(name):
     return None
 
 
-def get_default_is_period_for_type_calendar_days(name):
-    isp = get_default_is_period_for_type(name)
-    if name != 'crypto':
-        isp = isp * 365 // 252 + 60
-    else:
-        isp = isp // 24 + 60
-    return isp
-
-
 def get_default_slippage(data):
     if data.name == 'stocks':
         return float(get_env('SL_STOCKS', '0.05', True))
@@ -839,7 +830,8 @@ def check_correlation(portfolio_history, data, print_stack_trace=True):
         log_info("Ok. This strategy does not correlate with other strategies.")
         return
 
-    log_err("WARNING! This strategy correlates with other strategies.")
+    log_err("WARNING! This strategy correlates with other strategies and will be rejected.")
+    log_err("Modify the strategy to produce the different output.")
     log_info("The number of systems with a larger Sharpe ratio and correlation larger than 0.9:", len(cr_list))
     log_info("The max correlation value (with systems with a larger Sharpe ratio):", max([i['cofactor'] for i in cr_list]))
     my_cr = [i for i in cr_list if i['my']]

@@ -24,18 +24,19 @@ def load_data(
 
     uri = "cryptofutures?min_date=" + min_date.isoformat() + "&max_date=" + max_date.isoformat()
     raw = request_with_retry(uri, None)
-    if raw is None or len(raw) < 1:
-        arr = xr.DataArray(
-            [[np.nan]],
-            dims=[ds.TIME, ds.ASSET],
-            coords={
-                ds.TIME: pd.DatetimeIndex([max_date]),
-                ds.ASSET: ['ignore']
-            }
-        )[1:,1:]
-    else:
+    try:
         arr = xr.open_dataarray(raw, cache=True, decode_times=True)
         arr = arr.compute()
+    except:
+        arr = xr.DataArray(
+            [[[np.nan]*5]],
+            dims=[ds.TIME, ds.ASSET, ds.FIELD],
+            coords={
+                ds.TIME: pd.DatetimeIndex([max_date]),
+                ds.ASSET: ['ignore'],
+                ds.FIELD: [f.OPEN, f.LOW, f.HIGH, f.CLOSE, f.VOL]
+            }
+        )[1:,1:,:]
 
     if assets is not None:
         assets = list(set(assets))

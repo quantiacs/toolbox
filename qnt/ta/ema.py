@@ -33,7 +33,7 @@ def ema(series: nda.NdType, periods: int = 20, warm_periods: tp.Union[int, None]
     return nda.nd_universal_adapter(ema_np_1d, (series,), (periods, warm_periods,))
 
 
-def wilder_ma(series: np.ndarray, periods: int = 14, warm_periods: tp.Union[int, None] = None):
+def wilder_ma(series: nda.NdType, periods: int = 14, warm_periods: tp.Union[int, None] = None):
     """
     Wilder's Moving Average
     """

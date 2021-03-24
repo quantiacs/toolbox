@@ -7,7 +7,6 @@ from qnt.ta.wma import wma, lwma, vwma
 from qnt.ta.stochastic import stochastic_k, stochastic, slow_stochastic
 from qnt.ta.rsi import rsi
 from qnt.ta.roc import roc, sroc
-from qnt.ta.change import change
 from qnt.ta.macd import macd
 from qnt.ta.trix import trix
 
