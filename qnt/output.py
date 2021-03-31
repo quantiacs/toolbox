@@ -212,30 +212,7 @@ def check(output, data, kind=None):
 
                 log_info("Check the sharpe ratio...")
 
-                start_date = qns.get_default_is_start_date_for_type(kind)
-                sdd = pd.Timestamp(start_date)
-                osd = pd.Timestamp(output.where(abs(output).sum('asset') > 0).dropna('time').time.min().values)
-                dsd = pd.Timestamp(data.time.min().values)
-                if (dsd - sdd).days > 10:
-                    log_err("WARNING! There are not enough points in the data")
-                    log_err("The first point(" + str(dsd.date()) + ") should be earlier than " + str(sdd.date()))
-                    log_err("Load data more historical data.")
-                else:
-                    if len(data.sel(time=slice(None, sdd)).time) < 15:
-                        log_err("WARNING! There are not enough points in the data for the slippage calculation.")
-                        log_err("Add 15 extra data points to the data head (load data more historical data).")
-                if (osd - sdd).days > 7:
-                    log_err("WARNING! There are not enough points in the output.")
-                    log_err("The output series should start from " + str(sdd.date()) + " or earlier instead of " + str(osd.date()))
-                sd = max(sdd, dsd)
-                sd = sd.to_pydatetime()
-                fd = pd.Timestamp(data.time.max().values).to_pydatetime()
-                log_info("Period: " + str(sd.date()) + " - " + str(fd.date()))
-
-                output_slice = align(output, data.time, sd, fd)
-                rr = qns.calc_relative_return(data, output_slice)
-                sr = qns.calc_sharpe_ratio_annualized(rr)
-                sr = sr.isel(time=-1).values
+                sr = calc_sharpe_ratio_for_check(data, output, kind, True)
                 log_info("Sharpe Ratio =", sr)
 
                 if sr < 1:
@@ -248,6 +225,47 @@ def check(output, data, kind=None):
                 qns.check_correlation(output, data, False)
     except Exception as e:
         log_err(e)
+
+
+def calc_sharpe_ratio_for_check(data, output, kind=None, check_dates=True):
+    """
+    Calculates sharpe ratio for check according to the rules
+    :param data:
+    :param output:
+    :param kind: competition type
+    :param check_dates: do you need to check the sharpe ratio dates?
+    :return:
+    """
+    import qnt.stats as qns
+
+    if kind is None:
+        kind = data.name
+
+    start_date = qns.get_default_is_start_date_for_type(kind)
+    sdd = pd.Timestamp(start_date)
+    osd = pd.Timestamp(output.where(abs(output).sum('asset') > 0).dropna('time', 'all').time.min().values)
+    dsd = pd.Timestamp(data.time.min().values)
+    if check_dates:
+        if (dsd - sdd).days > 10:
+            log_err("WARNING! There are not enough points in the data")
+            log_err("The first point(" + str(dsd.date()) + ") should be earlier than " + str(sdd.date()))
+            log_err("Load data more historical data.")
+        else:
+            if len(data.sel(time=slice(None, sdd)).time) < 15:
+                log_err("WARNING! There are not enough points in the data for the slippage calculation.")
+                log_err("Add 15 extra data points to the data head (load data more historical data).")
+        if (osd - sdd).days > 7:
+            log_err("WARNING! There are not enough points in the output.")
+            log_err("The output series should start from " + str(sdd.date()) + " or earlier instead of " + str(osd.date()))
+    sd = max(sdd, dsd)
+    sd = sd.to_pydatetime()
+    fd = pd.Timestamp(data.time.max().values).to_pydatetime()
+    log_info("Period: " + str(sd.date()) + " - " + str(fd.date()))
+    output_slice = align(output, data.time, sd, fd)
+    rr = qns.calc_relative_return(data, output_slice)
+    sr = qns.calc_sharpe_ratio_annualized(rr)
+    sr = sr.isel(time=-1).values
+    return sr
 
 
 def write(output):

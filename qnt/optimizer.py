@@ -121,7 +121,7 @@ def standard_stats_function(data, output):
 
 
 def fast_stats_function(data, output):
-    close = data.sel(field='close').dropna('time')
+    close = data.sel(field='close').dropna('time', 'all').fillna(0)
     prev_output = output.shift(time=1)
     prev_close = close.shift(time=1)
     returns = (close - prev_close) * prev_output / prev_close
