@@ -21,6 +21,13 @@ def is_notebook():
 
 if is_notebook():
     ply.init_notebook_mode(connected=True)
+    try:
+        from IPython import get_ipython
+        if get_ipython().config['IPKernelApp']['kernel_class'].startswith('google.colab.'):
+            import plotly.io as pio
+            pio.renderers.default = 'colab'
+    except:
+        pass
 
 
 def make_major_plots(stats):
