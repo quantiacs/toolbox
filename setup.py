@@ -15,7 +15,6 @@ setup(
         'tabulate>=0.8.3',
         'bottleneck>=1.3.1',
         'numba==0.53',
-        'progressbar2>=3.37,<4',
-        'python>=3.7,<3.8'
+        'progressbar2>=3.37,<4'
     ]
 )
