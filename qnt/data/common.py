@@ -237,7 +237,7 @@ if api_key != 'default':
     if api_key == '':
         log_err("Please, specify the API_KEY.")
         log_err("See: https://quantiacs.io/documentation/en/user_guide/local_development.html")
-        exit(1)
+        sys.exit(1)
     else:
         url = tracking_host + "/auth/system/account/accountByKey?apiKey=" + api_key
         try:
@@ -246,7 +246,7 @@ if api_key != 'default':
             if e.code == 404:
                 log_err("Wrong API_KEY.")
                 log_err("See: https://quantiacs.io/documentation/en/user_guide/local_development.html")
-                exit(1)
+                sys.exit(1)
 sent_events = set()
 
 

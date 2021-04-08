@@ -11,3 +11,4 @@ id-translation.csv
 reverse
 /precheck_results/
 data-cache
+state.out.pickle.gz

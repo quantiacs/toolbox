@@ -3,11 +3,14 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import os, sys
+import inspect
+import copy
 
 import datetime
 import progressbar
 
 import qnt.output as qnout
+import qnt.state as qnstate
 import qnt.data as qndata
 import qnt.data.common as qndc
 import qnt.stats as qnstat
@@ -20,7 +23,10 @@ DataSet = tp.Union[xr.DataArray,dict]
 
 def backtest(*,
              competition_type: str,
-             strategy: tp.Callable[[DataSet], xr.DataArray],
+             strategy:  tp.Union[
+                tp.Callable[[DataSet], xr.DataArray],
+                tp.Callable[[DataSet, tp.Any], tp.Tuple[xr.DataArray, tp.Any]],
+             ],
              load_data: tp.Union[tp.Callable[[int], tp.Union[DataSet,tp.Tuple[DataSet,np.ndarray]]],None] = None,
              lookback_period: int = 365,
              test_period: int = 365*15,
@@ -29,6 +35,7 @@ def backtest(*,
              step: int = 1,
              analyze: bool = True,
              build_plots: bool = True,
+             collect_all_states: bool = False,
              ):
     """
 
@@ -42,6 +49,7 @@ def backtest(*,
     :param window: function which isolates data for one iterations
     :param analyze: analyze the output and calc stats
     :param build_plots: build plots (require analyze=True)
+    :patam collect_all_states: collect all states instead of the last one
     :return:
     """
     qndc.track_event("BACKTEST")
@@ -52,8 +60,11 @@ def backtest(*,
     if load_data is None:
         load_data = lambda tail: qndata.load_data_by_type(competition_type, tail=tail)
 
+    args_count = len(inspect.getfullargspec(strategy).args)
+    strategy_wrap = (lambda d, s: strategy(d)) if args_count < 2 else strategy
+
     log_info("Run last pass...")
-    print("Load data...")
+    log_info("Load data...")
     data = load_data(lookback_period)
     try:
         if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long'\
@@ -64,20 +75,27 @@ def backtest(*,
     except:
         pass
     data, time_series = extract_time_series(data)
-    print("Run pass...")
-    result = strategy(data)
-    if result is None:
-        log_err("ERROR! Strategy output is None!")
-    else:
-        log_info("Ok.")
+
+    log_info("Run strategy...")
+    state = None
+    if is_submitted() and args_count > 1:
+        state = qnstate.read()
+    result = strategy_wrap(data, state)
+    result, state = unpack_result(result)
+
+    log_info("Load data for cleanup...")
+    data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), tail=60)
+    result = qnout.clean(result, data)
+    result.name = competition_type
+    log_info("Write result...")
+    qnout.write(result)
+    qnstate.write(state)
 
     if is_submitted():
-        log_info("Load data for cleanup...")
-        data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), tail=60)
-        result = qnout.clean(result, data)
-        result.name = competition_type
-        qnout.write(result)
-        return result
+        if args_count > 1:
+            return result, state
+        else:
+            return result
 
     log_info("---")
 
@@ -94,12 +112,9 @@ def backtest(*,
         print("Load data...")
         data = load_data(lookback_period)
         data, time_series = extract_time_series(data)
-        print("Run pass...")
-        result = strategy(data)
-        if result is None:
-            log_err("ERROR! Strategy output is None!")
-        else:
-            log_info("Ok.")
+        print("Run strategy...")
+        result = strategy_wrap(data, None)
+        result, state = unpack_result(result)
     finally:
         qndc.MAX_DATE_LIMIT = None
         qndc.MAX_DATETIME_LIMIT = None
@@ -114,30 +129,35 @@ def backtest(*,
         return
 
     log_info("---")
-    result = run_iterations(time_series, data, window, start_date, lookback_period, strategy, step)
+    result, state = run_iterations(time_series, data, window, start_date, lookback_period, strategy_wrap, step, collect_all_states)
     if result is None:
         return
 
     log_info("Load data for cleanup and analysis...")
     min_date = time_series[0] - np.timedelta64(60, 'D')
     data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), min_date=str(min_date)[:10])
-
     result = qnout.clean(result, data, competition_type)
     result.name = competition_type
+    log_info("Write result...")
     qnout.write(result)
+    qnstate.write(state)
 
     if analyze:
         log_info("---")
         analyze_results(result, data, competition_type, build_plots)
 
-    return result
+    if args_count > 1:
+        return result, state
+    else:
+        return result
 
 
-def run_iterations(time_series, data, window, start_date, lookback_period, strategy, step):
+def run_iterations(time_series, data, window, start_date, lookback_period, strategy, step, collect_all_states):
     log_info("Run iterations...\n")
 
     ts = np.sort(time_series)
     outputs = []
+    all_states = []
 
     output_time_coord = ts[ts >= start_date]
     output_time_coord = output_time_coord[::step]
@@ -147,9 +167,11 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
     sys.stdout.flush()
 
     with progressbar.ProgressBar(max_value=len(output_time_coord), poll_interval=1) as p:
+        state = None
         for t in output_time_coord:
             tail = window(data, t, lookback_period)
-            output = strategy(tail)
+            result = strategy(tail, copy.deepcopy(state))
+            output, state = unpack_result(result)
             if type(output) != xr.DataArray:
                 log_err("Output is not xarray!")
                 return
@@ -160,6 +182,8 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
                 output = output.sel(time=t)
             output = output.drop(['field', 'time'], errors='ignore')
             outputs.append(output)
+            if collect_all_states:
+                all_states.append(state)
             i += 1
             p.update(i)
 
@@ -168,7 +192,7 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
     log_info("Merge outputs...")
     output = xr.concat(outputs, pd.Index(output_time_coord, name=qndata.ds.TIME))
 
-    return output
+    return output, all_states if collect_all_states else state
 
 
 def standard_window(data, max_date: np.datetime64, lookback_period:int):
@@ -187,6 +211,17 @@ def is_submitted():
     return os.environ.get("SUBMISSION_ID", "") != ""
 
 
+def unpack_result(result):
+    state = None
+    if type(result) == tuple:
+        if len(result) > 1:
+            state = result[1]
+    if len(result) == 0:
+        log_err("ERROR! The result tuple is empty.")
+    result = result[0]
+    if result is None:
+        log_err("ERROR! Strategy output is None!")
+    return result, state
 
 
 def analyze_results(output, data, kind, build_plots):

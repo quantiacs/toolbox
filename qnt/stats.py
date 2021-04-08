@@ -851,6 +851,17 @@ def check_correlation(portfolio_history, data, print_stack_trace=True):
 
         log_info(tabulate(rows, headers))
 
+    ex_cr = [i for i in cr_list if i['template']]
+    if len(ex_cr) > 0:
+        log_info("Correlated examples:\n")
+        headers = ['Name', "Coefficient", "Sharpe ratio"]
+        rows = []
+
+        for i in ex_cr:
+            rows.append([i['name'], i['cofactor'], i['sharpe_ratio']])
+
+        log_info(tabulate(rows, headers))
+
 
 print_correlation = check_correlation
 
