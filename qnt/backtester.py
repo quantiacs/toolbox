@@ -216,9 +216,9 @@ def unpack_result(result):
     if type(result) == tuple:
         if len(result) > 1:
             state = result[1]
-    if len(result) == 0:
-        log_err("ERROR! The result tuple is empty.")
-    result = result[0]
+        if len(result) == 0:
+            log_err("ERROR! The result tuple is empty.")
+        result = result[0]
     if result is None:
         log_err("ERROR! Strategy output is None!")
     return result, state
