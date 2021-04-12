@@ -14,7 +14,7 @@ def is_notebook():
         from IPython import get_ipython
         if 'IPKernelApp' not in get_ipython().config:
             return False
-    except ImportError:
+    except Exception:
         return False
     return True
 
