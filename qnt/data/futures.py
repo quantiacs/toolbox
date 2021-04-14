@@ -17,8 +17,20 @@ def load_data(
         max_date: tp.Union[str, datetime.date, datetime.datetime, None] = None,
         dims: tp.Tuple[str, str, str] = (ds.FIELD, ds.TIME, ds.ASSET),
         forward_order: bool = True,
-        tail: tp.Union[datetime.timedelta, int, float] = DEFAULT_TAIL
+        tail: tp.Union[datetime.timedelta, int, float] = DEFAULT_TAIL,
+        offset: int = 0,
 ) -> tp.Union[None, xr.DataArray]:
+    """
+    loads futures timeseries
+    :param assets: asset list
+    :param min_date:
+    :param max_date:
+    :param dims: dimensions order
+    :param forward_order: use forward order for dates
+    :param tail: period size in calendar days
+    :param offset: what the continuous contract to load: 0 - current, 1 - next, 2 - next+1
+    :return:
+    """
     track_event("DATA_FUTURES_SERIES")
     if max_date is None and "LAST_DATA_PATH" in os.environ:
         whole_data_file_flag_name = get_env("LAST_DATA_PATH", "last_data.txt")
@@ -32,7 +44,7 @@ def load_data(
     else:
         min_date = max_date - parse_tail(tail)
 
-    uri = "futures/data"
+    uri = "futures/data?offset=" + str(offset)
     raw = request_with_retry(uri, None)
 
     if raw is None or len(raw) < 1:
