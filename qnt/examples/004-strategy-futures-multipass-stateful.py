@@ -29,6 +29,9 @@ def strategy(data, state):
     ma_prev_prev = state['ma_prev']
     output_prev = state['output']
 
+    # align the arrays to prevent problems in case the asset list changes
+    ma_prev, ma_prev_prev, last_close = xr.align(ma_prev, ma_prev_prev, last_close, join='right')
+
     ma = ma_prev.where(np.isfinite(ma_prev), last_close) * 0.97 + last_close * 0.03
 
     buy_signal = np.logical_and(ma > ma_prev, ma_prev > ma_prev_prev)

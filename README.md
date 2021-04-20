@@ -93,3 +93,4 @@ Fix the errors if it is necessary.
 https://quantiacs.com/personalpage/strategies
 
 9 . Wait for your strategy pass filters and win the Contest.
+
