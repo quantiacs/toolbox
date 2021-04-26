@@ -6,6 +6,8 @@ from qnt.log import log_info, log_err
 
 @nb.jit(nb.float64[:](nb.float64[:], nb.int64), nopython=True)
 def shift_np_1d(series: np.ndarray, periods: int) -> np.ndarray:
+    if periods < 0:
+        return np.flip(shift_np_1d(np.flip(series), -periods))
     tail = np.empty((periods + 1,), dtype=np.double)
     not_nan_cnt = 0
     result = np.full(series.shape, np.nan, dtype=np.double)

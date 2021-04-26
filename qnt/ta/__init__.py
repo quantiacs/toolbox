@@ -11,7 +11,7 @@ from qnt.ta.macd import macd
 from qnt.ta.trix import trix
 
 # Index indicators
-from qnt.ta.atr import atr
+from qnt.ta.atr import atr, tr
 from qnt.ta.dms import dms
 
 # Cumulative

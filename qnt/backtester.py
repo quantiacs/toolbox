@@ -21,22 +21,186 @@ from qnt.log import log_info, log_err
 DataSet = tp.Union[xr.DataArray,dict]
 
 
-def backtest(*,
-             competition_type: str,
-             strategy:  tp.Union[
-                tp.Callable[[DataSet], xr.DataArray],
-                tp.Callable[[DataSet, tp.Any], tp.Tuple[xr.DataArray, tp.Any]],
-             ],
-             load_data: tp.Union[tp.Callable[[int], tp.Union[DataSet,tp.Tuple[DataSet,np.ndarray]]],None] = None,
-             lookback_period: int = 365,
-             test_period: int = 365*15,
-             start_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
-             window: tp.Union[tp.Callable[[DataSet,np.datetime64,int], DataSet], None] = None,
-             step: int = 1,
-             analyze: bool = True,
-             build_plots: bool = True,
-             collect_all_states: bool = False,
-             ):
+def backtest_ml(
+        *,
+        train: tp.Callable[[DataSet], tp.Any],
+        predict: tp.Union[
+            tp.Callable[[tp.Any, DataSet], xr.DataArray],
+            tp.Callable[[tp.Any, DataSet, tp.Any], tp.Tuple[xr.DataArray, tp.Any]],
+        ],
+
+        train_period: int = 4*365,
+        retrain_interval: int = 365,
+        predict_each_day: bool = False,
+        retrain_interval_after_submit: tp.Union[int, None] = None,
+
+        competition_type: str,
+        load_data: tp.Union[tp.Callable[[int], tp.Union[DataSet,tp.Tuple[DataSet,np.ndarray]]],None] = None,
+        lookback_period: int = 365,
+        test_period: int = 365*15,
+        start_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
+        window: tp.Union[tp.Callable[[DataSet,np.datetime64,int], DataSet], None] = None,
+        analyze: bool = True,
+        build_plots: bool = True,
+        collect_all_states: bool = False,
+    ):
+    """
+
+    :param train: creates and trains model for prediction
+    :param predict: predicts price movements and generates outputs
+    :param train_period: the data length in trading days for training
+    :param retrain_interval: how often to retrain the model(in calendar days)
+    :param predict_each_day: perform predict for every day. Set True if you suspect the looking forward
+    :param retrain_interval_after_submit:
+    :param competition_type: "futures" | "stocks" | "cryptofutures" | "stocks_long" | "crypto"
+    :param load_data: data load function, accepts tail arg, returns time series and data
+    :param lookback_period: the minimal calendar days period for one prediction
+    :param test_period:  test period (calendar days)
+    :param start_date: start date for backtesting, overrides test period
+    :param window: function which isolates data for one prediction or training
+    :param analyze: analyze the output and calc stats
+    :param build_plots: build plots (require analyze=True)
+    :param collect_all_states: collect all states instead of the last one
+    :return:
+    """
+    qndc.track_event("ML_BACKTEST")
+
+    if load_data is None:
+        load_data = lambda tail: qndata.load_data_by_type(competition_type, tail=tail)
+
+    if start_date is None:
+        start_date = pd.Timestamp.today().to_datetime64() - np.timedelta64(test_period-1, 'D')
+    else:
+        start_date = pd.Timestamp(start_date).to_datetime64()
+        test_period = (pd.Timestamp.today().to_datetime64() - start_date) / np.timedelta64(1, 'D')
+
+    if window is None:
+        window = standard_window
+
+    args_count = len(inspect.getfullargspec(predict).args)
+    predict_wrap = (lambda m, d, s: predict(m, d)) if args_count < 3 else predict
+
+    log_info("Run the last iteration...")
+
+    data = load_data(train_period + lookback_period)
+    data, data_ts = extract_time_series(data)
+
+    created = None
+    model = None
+    state = None
+    if is_submitted():
+        state = qnstate.read()
+        if state != None:
+            created = state[0]
+            model = state[1]
+            state = state[2]
+    retrain_interval_cur = retrain_interval_after_submit if is_submitted() else retrain_interval
+    if retrain_interval_cur is None:
+        retrain_interval_cur = retrain_interval
+    need_retrain = model is None or retrain_interval_cur == 1 \
+                   or data_ts[-1] >= created + np.timedelta64(retrain_interval_cur, 'D')
+    if need_retrain:
+        train_data_slice = window(data, data_ts[-1], train_period).copy(True)
+        model = train(train_data_slice)
+        created = data_ts[-1]
+
+    test_data_slice = window(data, data_ts[-1], lookback_period).copy(True)
+    output = predict_wrap(model, test_data_slice, state)
+    output, state = unpack_result(output)
+    if data_ts[-1] in output.time:
+        result = output.sel(time=[data_ts[-1]])
+        result = qnout.clean(result, data, competition_type)
+        result.name = competition_type
+        qnout.write(result)
+
+    if need_retrain and retrain_interval_cur > 1 or state is not None:
+        qnstate.write((created, model, state))
+
+    log_info("Run all iterations...")
+    log_info('Load data...')
+
+    train_data = load_data(test_period + train_period + lookback_period)
+    train_data, train_ts = extract_time_series(train_data)
+
+    test_data = load_data(test_period)
+    test_ts = extract_time_series(test_data)[1]
+
+    log_info('Backtest...')
+    outputs = []
+    t = start_date
+    state = None
+    model = None
+    start_t = None
+    states = []
+    with progressbar.ProgressBar(max_value=len(test_ts), poll_interval=1) as p:
+        while t <= test_ts[-1]:
+            start_t = test_ts[test_ts >= t][0]
+            end_t = t + np.timedelta64(retrain_interval, 'D')
+            end_t = test_ts[test_ts < end_t][-1]
+
+            train_data_slice = window(train_data, start_t, train_period).copy(True)
+            #print("train model t <=", str(start_t)[:10])
+            model = train(train_data_slice)
+            #print("predict", str(start_t)[:10], "<= t <=", str(end_t)[:10])
+            if predict_each_day:
+                for test_t in test_ts[np.logical_and(test_ts >= start_t, test_ts <= end_t)]:
+                    test_data_slice = window(train_data, test_t, lookback_period).copy(True)
+                    output = predict_wrap(model, test_data_slice, state)
+                    output, state = unpack_result(output)
+                    if collect_all_states:
+                        states.append(state)
+                    if test_t in output.time:
+                        output = output.sel(time=[test_t])
+                        outputs.append(output)
+                        p.update(np.where(test_ts == test_t)[0].item())
+            else:
+                test_data_slice = window(train_data, end_t, lookback_period + retrain_interval).copy(True)
+                output = predict_wrap(model, test_data_slice, state)
+                output, state = unpack_result(output)
+                if collect_all_states:
+                    states.append(state)
+                output = output.where(output.time >= t).where(output.time <= end_t).dropna('time', 'all')
+                outputs.append(output)
+
+            t = t + np.timedelta64(retrain_interval, 'D')
+            p.update(np.where(test_ts == end_t)[0].item())
+
+        result = xr.concat(outputs, dim='time')
+
+        result = qnout.clean(result, train_data, competition_type)
+        result.name = competition_type
+        qnout.write(result)
+        qnstate.write((start_t, model, state))
+
+        if analyze:
+            log_info("---")
+            analyze_results(result, train_data, competition_type, build_plots)
+
+    if state is None:
+        return result
+    elif collect_all_states:
+        return result, states
+    else:
+        return result, state
+
+
+def backtest(
+        *,
+        competition_type: str,
+        strategy:  tp.Union[
+            tp.Callable[[DataSet], xr.DataArray],
+            tp.Callable[[DataSet, tp.Any], tp.Tuple[xr.DataArray, tp.Any]],
+        ],
+        load_data: tp.Union[tp.Callable[[int], tp.Union[DataSet,tp.Tuple[DataSet,np.ndarray]]],None] = None,
+        lookback_period: int = 365,
+        test_period: int = 365*15,
+        start_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
+        window: tp.Union[tp.Callable[[DataSet,np.datetime64,int], DataSet], None] = None,
+        step: int = 1,
+        analyze: bool = True,
+        build_plots: bool = True,
+        collect_all_states: bool = False,
+    ):
     """
 
     :param competition_type: "futures" | "stocks" | "cryptofutures" | "stocks_long" | "crypto"
@@ -46,10 +210,10 @@ def backtest(*,
     :param test_period: test period (calendar days)
     :param start_date: start date for backtesting, overrides test period
     :param step: step size
-    :param window: function which isolates data for one iterations
+    :param window: function which isolates data for one iteration
     :param analyze: analyze the output and calc stats
     :param build_plots: build plots (require analyze=True)
-    :patam collect_all_states: collect all states instead of the last one
+    :param collect_all_states: collect all states instead of the last one
     :return:
     """
     qndc.track_event("BACKTEST")
