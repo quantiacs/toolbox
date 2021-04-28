@@ -1,6 +1,6 @@
 package:
   name: "qnt"
-  version: "0.0.251"
+  version: "0.0.253"
 
 source:
   path: .
@@ -33,4 +33,4 @@ requirements:
 
 about:
   license: MIT
-  home: https://quantiacs.com
+  home: https://quantnet.ai

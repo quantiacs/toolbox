@@ -58,6 +58,15 @@ def clean(output, data, kind=None, debug=True):
         if not single_day:
             track_event("OUTPUT_CLEAN")
 
+        log_info("fix uniq")
+        if not single_day:
+            # uniq time fix
+            val,idx = np.unique(output.time, return_index=True)
+            output = output.isel(time=idx)
+        # uniq asset fix
+        val,idx = np.unique(output.asset, return_index=True)
+        output = output.isel(asset=idx)
+
         if single_day:
             output = output.drop(ds.TIME, errors='ignore')
             output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))

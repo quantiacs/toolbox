@@ -85,18 +85,18 @@ def backtest_ml(
     data = load_data(train_period + lookback_period)
     data, data_ts = extract_time_series(data)
 
+    retrain_interval_cur = retrain_interval_after_submit if is_submitted() else retrain_interval
+    if retrain_interval_cur is None:
+        retrain_interval_cur = retrain_interval
     created = None
     model = None
     state = None
-    if is_submitted():
+    if is_submitted() and (args_count > 2 or retrain_interval_cur > 1):
         state = qnstate.read()
         if state != None:
             created = state[0]
             model = state[1]
             state = state[2]
-    retrain_interval_cur = retrain_interval_after_submit if is_submitted() else retrain_interval
-    if retrain_interval_cur is None:
-        retrain_interval_cur = retrain_interval
     need_retrain = model is None or retrain_interval_cur == 1 \
                    or data_ts[-1] >= created + np.timedelta64(retrain_interval_cur, 'D')
     if need_retrain:
@@ -116,6 +116,12 @@ def backtest_ml(
     if need_retrain and retrain_interval_cur > 1 or state is not None:
         qnstate.write((created, model, state))
 
+    if is_submitted():
+        if state is not None:
+            return output, [state] if collect_all_states else state
+        else:
+            return output
+
     log_info("Run all iterations...")
     log_info('Load data...')
 
@@ -127,23 +133,22 @@ def backtest_ml(
 
     log_info('Backtest...')
     outputs = []
-    t = start_date
+    t = test_ts[0]
     state = None
     model = None
-    start_t = None
     states = []
     with progressbar.ProgressBar(max_value=len(test_ts), poll_interval=1) as p:
-        while t <= test_ts[-1]:
-            start_t = test_ts[test_ts >= t][0]
-            end_t = t + np.timedelta64(retrain_interval, 'D')
-            end_t = test_ts[test_ts < end_t][-1]
+        go = True
+        while go:
+            end_t = t + np.timedelta64(max(retrain_interval - 1, 0), 'D')
+            end_t = test_ts[test_ts <= end_t][-1]
 
-            train_data_slice = window(train_data, start_t, train_period).copy(True)
-            #print("train model t <=", str(start_t)[:10])
+            train_data_slice = window(train_data, t, train_period).copy(True)
+            # print("train model t <=", str(t)[:10])
             model = train(train_data_slice)
-            #print("predict", str(start_t)[:10], "<= t <=", str(end_t)[:10])
+            # print("predict", str(t)[:10], "<= t <=", str(end_t)[:10])
             if predict_each_day:
-                for test_t in test_ts[np.logical_and(test_ts >= start_t, test_ts <= end_t)]:
+                for test_t in test_ts[np.logical_and(test_ts >= t, test_ts <= end_t)]:
                     test_data_slice = window(train_data, test_t, lookback_period).copy(True)
                     output = predict_wrap(model, test_data_slice, state)
                     output, state = unpack_result(output)
@@ -162,15 +167,20 @@ def backtest_ml(
                 output = output.where(output.time >= t).where(output.time <= end_t).dropna('time', 'all')
                 outputs.append(output)
 
-            t = t + np.timedelta64(retrain_interval, 'D')
             p.update(np.where(test_ts == end_t)[0].item())
+
+            next_t = test_ts[test_ts > end_t]
+            if len(next_t) > 0:
+                t = next_t[0]
+            else:
+                go = False
 
         result = xr.concat(outputs, dim='time')
 
         result = qnout.clean(result, train_data, competition_type)
         result.name = competition_type
         qnout.write(result)
-        qnstate.write((start_t, model, state))
+        qnstate.write((t, model, state))
 
         if analyze:
             log_info("---")
@@ -257,7 +267,7 @@ def backtest(
 
     if is_submitted():
         if args_count > 1:
-            return result, state
+            return result, [state] if collect_all_states else state
         else:
             return result
 
