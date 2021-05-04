@@ -307,7 +307,7 @@ def align(output, time_coord, start=None, end=None):
     :return: aligned and cut output
     """
     res = normalize(output)
-    res = res.broadcast_like(time_coord)
+    res = xr.align(res, time_coord, join='right')[0]
     res = res.fillna(0)
     if start is not None:
         res = res.sel(time=slice(start, None))
