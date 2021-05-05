@@ -306,11 +306,11 @@ def align(output, time_coord, start=None, end=None):
     :param end: end date
     :return: aligned and cut output
     """
-    res = normalize(output)
-    res = xr.align(res, time_coord, join='right')[0]
-    res = res.fillna(0)
     if start is not None:
-        res = res.sel(time=slice(start, None))
+        time_coord = time_coord.sel(time=slice(start, None))
     if end is not None:
-        res = res.sel(time=slice(None, end))
+        time_coord = time_coord.sel(time=slice(None, end))
+    res = xr.align(output, time_coord, join='right')[0]
+    res = res.fillna(0)
+    res = normalize(res)
     return res
