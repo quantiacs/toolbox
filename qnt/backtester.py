@@ -76,6 +76,8 @@ def backtest_ml(
 
     if window is None:
         window = standard_window
+    def copy_window(data, dt, tail):
+        return copy.deepcopy(window(data, dt, tail))
 
     args_count = len(inspect.getfullargspec(predict).args)
     predict_wrap = (lambda m, d, s: predict(m, d)) if args_count < 3 else predict
@@ -100,11 +102,11 @@ def backtest_ml(
     need_retrain = model is None or retrain_interval_cur == 1 \
                    or data_ts[-1] >= created + np.timedelta64(retrain_interval_cur, 'D')
     if need_retrain:
-        train_data_slice = window(data, data_ts[-1], train_period).copy(True)
+        train_data_slice = copy_window(data, data_ts[-1], train_period)
         model = train(train_data_slice)
         created = data_ts[-1]
 
-    test_data_slice = window(data, data_ts[-1], lookback_period).copy(True)
+    test_data_slice = copy_window(data, data_ts[-1], lookback_period)
     output = predict_wrap(model, test_data_slice, state)
     output, state = unpack_result(output)
     if data_ts[-1] in output.time:
@@ -143,13 +145,13 @@ def backtest_ml(
             end_t = t + np.timedelta64(max(retrain_interval - 1, 0), 'D')
             end_t = test_ts[test_ts <= end_t][-1]
 
-            train_data_slice = window(train_data, t, train_period).copy(True)
+            train_data_slice = copy_window(train_data, t, train_period)
             # print("train model t <=", str(t)[:10])
             model = train(train_data_slice)
             # print("predict", str(t)[:10], "<= t <=", str(end_t)[:10])
             if predict_each_day:
                 for test_t in test_ts[np.logical_and(test_ts >= t, test_ts <= end_t)]:
-                    test_data_slice = window(train_data, test_t, lookback_period).copy(True)
+                    test_data_slice = copy_window(train_data, test_t, lookback_period)
                     output = predict_wrap(model, test_data_slice, state)
                     output, state = unpack_result(output)
                     if collect_all_states:
@@ -159,7 +161,7 @@ def backtest_ml(
                         outputs.append(output)
                         p.update(np.where(test_ts == test_t)[0].item())
             else:
-                test_data_slice = window(train_data, end_t, lookback_period + retrain_interval).copy(True)
+                test_data_slice = copy_window(train_data, end_t, lookback_period + retrain_interval)
                 output = predict_wrap(model, test_data_slice, state)
                 output, state = unpack_result(output)
                 if collect_all_states:
@@ -327,6 +329,9 @@ def backtest(
 
 
 def run_iterations(time_series, data, window, start_date, lookback_period, strategy, step, collect_all_states):
+    def copy_window(data, dt, tail):
+        return copy.deepcopy(window(data, dt, tail))
+
     log_info("Run iterations...\n")
 
     ts = np.sort(time_series)
@@ -343,7 +348,7 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
     with progressbar.ProgressBar(max_value=len(output_time_coord), poll_interval=1) as p:
         state = None
         for t in output_time_coord:
-            tail = window(data, t, lookback_period)
+            tail = copy_window(data, t, lookback_period)
             result = strategy(tail, copy.deepcopy(state))
             output, state = unpack_result(result)
             if type(output) != xr.DataArray:
@@ -371,7 +376,7 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
 
 def standard_window(data, max_date: np.datetime64, lookback_period:int):
     min_date = max_date - np.timedelta64(lookback_period,'D')
-    return data.loc[dict(time=slice(min_date, max_date))].copy(True)
+    return data.loc[dict(time=slice(min_date, max_date))]
 
 
 def extract_time_series(data):
