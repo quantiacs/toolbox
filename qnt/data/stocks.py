@@ -209,7 +209,7 @@ def load_origin_data_chunk(assets, min_date, max_date):  # min_date and max_date
     raw = request_with_retry("data", params.encode())
     if len(raw) == 0:
         return None
-    arr = xr.open_dataarray(raw, cache=True, decode_times=True)
+    arr = xr.open_dataarray(raw, cache=False, decode_times=True)
     arr = arr.compute()
     return arr
 

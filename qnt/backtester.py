@@ -39,6 +39,7 @@ def backtest_ml(
         lookback_period: int = 365,
         test_period: int = 365*15,
         start_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
+        end_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
         window: tp.Union[tp.Callable[[DataSet,np.datetime64,int], DataSet], None] = None,
         analyze: bool = True,
         build_plots: bool = True,
@@ -57,6 +58,7 @@ def backtest_ml(
     :param lookback_period: the minimal calendar days period for one prediction
     :param test_period:  test period (calendar days)
     :param start_date: start date for backtesting, overrides test period
+    :param end_date: end date for backtesting, by default - now
     :param window: function which isolates data for one prediction or training
     :param analyze: analyze the output and calc stats
     :param build_plots: build plots (require analyze=True)
@@ -68,12 +70,6 @@ def backtest_ml(
     if load_data is None:
         load_data = lambda tail: qndata.load_data_by_type(competition_type, tail=tail)
 
-    if start_date is None:
-        start_date = pd.Timestamp.today().to_datetime64() - np.timedelta64(test_period-1, 'D')
-    else:
-        start_date = pd.Timestamp(start_date).to_datetime64()
-        test_period = (pd.Timestamp.today().to_datetime64() - start_date) / np.timedelta64(1, 'D')
-
     if window is None:
         window = standard_window
     def copy_window(data, dt, tail):
@@ -84,7 +80,7 @@ def backtest_ml(
 
     log_info("Run the last iteration...")
 
-    data = load_data(train_period + lookback_period)
+    data = load_data(max(train_period, lookback_period))
     data, data_ts = extract_time_series(data)
 
     retrain_interval_cur = retrain_interval_after_submit if is_submitted() else retrain_interval
@@ -95,7 +91,7 @@ def backtest_ml(
     state = None
     if is_submitted() and (args_count > 2 or retrain_interval_cur > 1):
         state = qnstate.read()
-        if state != None:
+        if state is not None:
             created = state[0]
             model = state[1]
             state = state[2]
@@ -109,11 +105,15 @@ def backtest_ml(
     test_data_slice = copy_window(data, data_ts[-1], lookback_period)
     output = predict_wrap(model, test_data_slice, state)
     output, state = unpack_result(output)
+
     if data_ts[-1] in output.time:
         result = output.sel(time=[data_ts[-1]])
-        result = qnout.clean(result, data, competition_type)
-        result.name = competition_type
-        qnout.write(result)
+
+    data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), tail=60)
+    result = qnout.clean(result, data, competition_type)
+
+    result.name = competition_type
+    qnout.write(result)
 
     if need_retrain and retrain_interval_cur > 1 or state is not None:
         qnstate.write((created, model, state))
@@ -124,76 +124,104 @@ def backtest_ml(
         else:
             return output
 
-    log_info("Run all iterations...")
-    log_info('Load data...')
+    try:
+        print("---")
+        qndc.set_max_datetime(end_date)
 
-    train_data = load_data(test_period + train_period + lookback_period)
-    train_data, train_ts = extract_time_series(train_data)
+        last_date = np.datetime64(qndc.parse_date(datetime.date.today()))
+        if start_date is None:
+            start_date = last_date - np.timedelta64(test_period-1, 'D')
+        else:
+            start_date = pd.Timestamp(start_date).to_datetime64()
+            test_period = (last_date - start_date) // np.timedelta64(1, 'D')
 
-    test_data = load_data(test_period)
-    test_ts = extract_time_series(test_data)[1]
+        # ---
+        log_info("Run First Iteration...") # to catch most errors
+        qndc.set_max_datetime(start_date)
+        data = load_data(max(train_period, lookback_period))
+        data, data_ts = extract_time_series(data)
 
-    log_info('Backtest...')
-    outputs = []
-    t = test_ts[0]
-    state = None
-    model = None
-    states = []
-    with progressbar.ProgressBar(max_value=len(test_ts), poll_interval=1) as p:
-        go = True
-        while go:
-            end_t = t + np.timedelta64(max(retrain_interval - 1, 0), 'D')
-            end_t = test_ts[test_ts <= end_t][-1]
+        train_data_slice = copy_window(data, data_ts[-1], train_period)
+        model = train(train_data_slice)
 
-            train_data_slice = copy_window(train_data, t, train_period)
-            # print("train model t <=", str(t)[:10])
-            model = train(train_data_slice)
-            # print("predict", str(t)[:10], "<= t <=", str(end_t)[:10])
-            if predict_each_day:
-                for test_t in test_ts[np.logical_and(test_ts >= t, test_ts <= end_t)]:
-                    test_data_slice = copy_window(train_data, test_t, lookback_period)
+        test_data_slice = copy_window(data, data_ts[-1], lookback_period)
+        output = predict_wrap(model, test_data_slice, state)
+        output, state = unpack_result(output)
+
+        # ---
+        print("---")
+        qndc.set_max_datetime(end_date)
+        log_info("Run all iterations...")
+        log_info('Load data...')
+
+        train_data = load_data(test_period + train_period + lookback_period)
+        train_data, train_ts = extract_time_series(train_data)
+
+        test_data = load_data(test_period)
+        test_ts = extract_time_series(test_data)[1]
+
+        log_info('Backtest...')
+        outputs = []
+        t = test_ts[0]
+        state = None
+        model = None
+        states = []
+        with progressbar.ProgressBar(max_value=len(test_ts), poll_interval=1) as p:
+            go = True
+            while go:
+                end_t = t + np.timedelta64(max(retrain_interval - 1, 0), 'D')
+                end_t = test_ts[test_ts <= end_t][-1]
+
+                train_data_slice = copy_window(train_data, t, train_period)
+                # print("train model t <=", str(t)[:10])
+                model = train(train_data_slice)
+                # print("predict", str(t)[:10], "<= t <=", str(end_t)[:10])
+                if predict_each_day:
+                    for test_t in test_ts[np.logical_and(test_ts >= t, test_ts <= end_t)]:
+                        test_data_slice = copy_window(train_data, test_t, lookback_period)
+                        output = predict_wrap(model, test_data_slice, state)
+                        output, state = unpack_result(output)
+                        if collect_all_states:
+                            states.append(state)
+                        if test_t in output.time:
+                            output = output.sel(time=[test_t])
+                            outputs.append(output)
+                            p.update(np.where(test_ts == test_t)[0].item())
+                else:
+                    test_data_slice = copy_window(train_data, end_t, lookback_period + retrain_interval)
                     output = predict_wrap(model, test_data_slice, state)
                     output, state = unpack_result(output)
                     if collect_all_states:
                         states.append(state)
-                    if test_t in output.time:
-                        output = output.sel(time=[test_t])
-                        outputs.append(output)
-                        p.update(np.where(test_ts == test_t)[0].item())
-            else:
-                test_data_slice = copy_window(train_data, end_t, lookback_period + retrain_interval)
-                output = predict_wrap(model, test_data_slice, state)
-                output, state = unpack_result(output)
-                if collect_all_states:
-                    states.append(state)
-                output = output.where(output.time >= t).where(output.time <= end_t).dropna('time', 'all')
-                outputs.append(output)
+                    output = output.where(output.time >= t).where(output.time <= end_t).dropna('time', 'all')
+                    outputs.append(output)
 
-            p.update(np.where(test_ts == end_t)[0].item())
+                p.update(np.where(test_ts == end_t)[0].item())
 
-            next_t = test_ts[test_ts > end_t]
-            if len(next_t) > 0:
-                t = next_t[0]
-            else:
-                go = False
+                next_t = test_ts[test_ts > end_t]
+                if len(next_t) > 0:
+                    t = next_t[0]
+                else:
+                    go = False
 
-        result = xr.concat(outputs, dim='time')
-
-        result = qnout.clean(result, train_data, competition_type)
-        result.name = competition_type
-        qnout.write(result)
-        qnstate.write((t, model, state))
-
-        if analyze:
-            log_info("---")
-            analyze_results(result, train_data, competition_type, build_plots)
-
-    if state is None:
-        return result
-    elif collect_all_states:
-        return result, states
-    else:
-        return result, state
+            result = xr.concat(outputs, dim='time')
+            min_date = test_ts[0] - np.timedelta64(60, 'D')
+            data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), min_date=str(min_date)[:10])
+            result = qnout.clean(result, data, competition_type)
+            result.name = competition_type
+            qnout.write(result)
+            qnstate.write((t, model, state))
+            if analyze:
+                log_info("---")
+                analyze_results(result, data, competition_type, build_plots)
+                if state is None:
+                    return result
+                elif collect_all_states:
+                    return result, states
+                else:
+                    return result, state
+    finally:
+        qndc.set_max_datetime(None)
 
 
 def backtest(
@@ -207,6 +235,7 @@ def backtest(
         lookback_period: int = 365,
         test_period: int = 365*15,
         start_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
+        end_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
         window: tp.Union[tp.Callable[[DataSet,np.datetime64,int], DataSet], None] = None,
         step: int = 1,
         analyze: bool = True,
@@ -221,6 +250,7 @@ def backtest(
     :param strategy: accepts data, returns weights distribution for the last day
     :param test_period: test period (calendar days)
     :param start_date: start date for backtesting, overrides test period
+    :param end_date: end date for backtesting, by default - now
     :param step: step size
     :param window: function which isolates data for one iteration
     :param analyze: analyze the output and calc stats
@@ -239,14 +269,15 @@ def backtest(
     args_count = len(inspect.getfullargspec(strategy).args)
     strategy_wrap = (lambda d, s: strategy(d)) if args_count < 2 else strategy
 
+    # ---
     log_info("Run last pass...")
     log_info("Load data...")
     data = load_data(lookback_period)
     try:
         if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long'\
-            or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures'\
-            or data.name == 'crypto' and competition_type != 'crypto'\
-            or data.name == 'futures' and competition_type != 'futures':
+             or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures'\
+             or data.name == 'crypto' and competition_type != 'crypto'\
+             or data.name == 'futures' and competition_type != 'futures':
             log_err("WARNING! The data type and the competition type are mismatch.")
     except:
         pass
@@ -272,60 +303,66 @@ def backtest(
             return result, [state] if collect_all_states else state
         else:
             return result
+    # ---
 
     log_info("---")
-
-    if start_date is None:
-        start_date = pd.Timestamp.today().to_datetime64() - np.timedelta64(test_period-1, 'D')
-    else:
-        start_date = pd.Timestamp(start_date).to_datetime64()
-        test_period = (pd.Timestamp.today().to_datetime64() - start_date) / np.timedelta64(1, 'D')
-
-    log_info("Run first pass...")
     try:
-        qndc.MAX_DATETIME_LIMIT = pd.Timestamp(start_date).to_pydatetime()
-        qndc.MAX_DATE_LIMIT = qndc.MAX_DATETIME_LIMIT.date()
+        qndc.set_max_datetime(end_date)
+        last_date = np.datetime64(qndc.parse_date(datetime.date.today()))
+        if start_date is None:
+            start_date = last_date - np.timedelta64(test_period-1, 'D')
+        else:
+            start_date = pd.Timestamp(start_date).to_datetime64()
+            test_period = (last_date - start_date) // np.timedelta64(1, 'D')
+
+        # ---
+
+        log_info("Run first pass...")
+        qndc.set_max_datetime(start_date)
+
         print("Load data...")
         data = load_data(lookback_period)
         data, time_series = extract_time_series(data)
         print("Run strategy...")
         result = strategy_wrap(data, None)
         result, state = unpack_result(result)
-    finally:
-        qndc.MAX_DATE_LIMIT = None
-        qndc.MAX_DATETIME_LIMIT = None
-
-    log_info("---")
-
-    log_info("Load full data...")
-    data = load_data(test_period + lookback_period)
-    data, time_series = extract_time_series(data)
-    if len(time_series) < 1:
-        log_err("Time series is empty")
-        return
-
-    log_info("---")
-    result, state = run_iterations(time_series, data, window, start_date, lookback_period, strategy_wrap, step, collect_all_states)
-    if result is None:
-        return
-
-    log_info("Load data for cleanup and analysis...")
-    min_date = time_series[0] - np.timedelta64(60, 'D')
-    data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), min_date=str(min_date)[:10])
-    result = qnout.clean(result, data, competition_type)
-    result.name = competition_type
-    log_info("Write result...")
-    qnout.write(result)
-    qnstate.write(state)
-
-    if analyze:
         log_info("---")
-        analyze_results(result, data, competition_type, build_plots)
 
-    if args_count > 1:
-        return result, state
-    else:
-        return result
+        qndc.set_max_datetime(end_date)
+
+        log_info("Load full data...")
+        data = load_data(test_period + lookback_period)
+        data, time_series = extract_time_series(data)
+        if len(time_series) < 1:
+            log_err("Time series is empty")
+            return
+
+        # ---
+
+        log_info("---")
+        result, state = run_iterations(time_series, data, window, start_date, lookback_period, strategy_wrap, step, collect_all_states)
+        if result is None:
+            return
+
+        log_info("Load data for cleanup and analysis...")
+        min_date = time_series[0] - np.timedelta64(60, 'D')
+        data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), min_date=str(min_date)[:10])
+        result = qnout.clean(result, data, competition_type)
+        result.name = competition_type
+        log_info("Write result...")
+        qnout.write(result)
+        qnstate.write(state)
+
+        if analyze:
+            log_info("---")
+            analyze_results(result, data, competition_type, build_plots)
+
+        if args_count > 1:
+            return result, state
+        else:
+            return result
+    finally:
+        qndc.set_max_datetime(None)
 
 
 def run_iterations(time_series, data, window, start_date, lookback_period, strategy, step, collect_all_states):

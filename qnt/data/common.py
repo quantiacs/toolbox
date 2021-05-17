@@ -3,7 +3,7 @@ import datetime
 import os
 import logging
 from urllib.parse import urljoin
-import urllib.error
+import urllib.error, urllib.parse
 import sys
 import urllib.request
 import time
@@ -65,6 +65,7 @@ def get_env(key, def_val, silent=False):
 
 ACCESS_KEY = get_env('API_KEY', '')
 BASE_URL = get_env('DATA_BASE_URL', 'https://data-api.quantiacs.io/')
+ORIGIN_BASE_URL=BASE_URL
 
 def request_with_retry(uri, data):
     url = urljoin(BASE_URL, uri)
@@ -108,33 +109,38 @@ def request_with_retry(uri, data):
     raise Exception("can't download " + uri)
 
 
-def parse_date(dt: tp.Union[None, str, datetime.datetime, datetime.date]) -> datetime.date:
+def parse_date(dt: tp.Union[None, str, datetime.datetime, datetime.date], limit: bool = True) -> datetime.date:
     if dt is None:
         res = datetime.date.today()
     else:
         res = pd.Timestamp(dt).date()
-    if MAX_DATE_LIMIT is not None:
-        if res is not None:
-            res = min(MAX_DATE_LIMIT, res)
-        else:
-            res = MAX_DATE_LIMIT
+    if limit:
+        if MAX_DATE_LIMIT is not None:
+            if res is not None:
+                res = min(MAX_DATE_LIMIT, res)
+            else:
+                res = MAX_DATE_LIMIT
     return res
 
 
 def parse_tail(tail: tp.Union[datetime.timedelta, int]):
-    return tail if type(tail) == datetime.timedelta else datetime.timedelta(days=tail)
+    return tail if type(tail) == datetime.timedelta else datetime.timedelta(days=int(tail))
 
 
-def parse_date_and_hour(dt: tp.Union[None, str, datetime.datetime, datetime.date]) -> datetime.datetime:
+def parse_date_and_hour(
+        dt: tp.Union[None, str, datetime.datetime, datetime.date],
+        limit: bool = True
+) -> datetime.datetime:
     if dt is None:
         res = datetime.datetime.now()
     else:
         res = pd.Timestamp(dt).to_pydatetime()
-    if MAX_DATETIME_LIMIT is not None:
-        if res is not None:
-            res = min(MAX_DATETIME_LIMIT, res)
-        else:
-            res = MAX_DATETIME_LIMIT
+    if limit:
+        if MAX_DATETIME_LIMIT is not None:
+            if res is not None:
+                res = min(MAX_DATETIME_LIMIT, res)
+            else:
+                res = MAX_DATETIME_LIMIT
     return res
 
 
@@ -146,11 +152,11 @@ def parse_max_datetime_from_url(url):
     r = re.compile("^.+/(\\d{4}-\\d{2}-\\d{2}T\\d{2})/{0,1}$")
     m = r.match(url)
     if m is not None:
-        return parse_date_and_hour(m.group(1))
+        return parse_date_and_hour(m.group(1), False)
     r = re.compile("^.+/(\\d{4}-\\d{2}-\\d{2})/{0,1}$")
     m = r.match(url)
     if m is not None:
-        return parse_date_and_hour(m.group(1))
+        return parse_date_and_hour(m.group(1), False)
     return None
 
 
@@ -230,6 +236,18 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 if MAX_DATE_LIMIT is None:
     MAX_DATETIME_LIMIT = parse_max_datetime_from_url(BASE_URL)
     MAX_DATE_LIMIT = None if MAX_DATETIME_LIMIT is None else MAX_DATETIME_LIMIT.date()
+
+
+def set_max_datetime(dt):
+    global BASE_URL, MAX_DATETIME_LIMIT, MAX_DATE_LIMIT
+    if dt is not None:
+        host = ORIGIN_BASE_URL.split('/last/')[0]
+        BASE_URL = urllib.parse.urljoin(host, '/last/' + pd.Timestamp(dt).isoformat()[0:13] + '/')
+    else:
+        BASE_URL = ORIGIN_BASE_URL
+    MAX_DATETIME_LIMIT = parse_max_datetime_from_url(BASE_URL)
+    MAX_DATE_LIMIT = None if MAX_DATETIME_LIMIT is None else MAX_DATETIME_LIMIT.date()
+
 
 api_key = os.environ.get("API_KEY", '').strip()
 tracking_host = os.environ.get("TRACKING_HOST", "https://quantiacs.io")

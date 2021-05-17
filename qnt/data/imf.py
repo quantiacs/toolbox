@@ -59,7 +59,7 @@ def load_currency_data(
             }
         )[:,1:]
     else:
-        arr = xr.open_dataarray(raw, cache=True, decode_times=True)
+        arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
     arr = arr.sel(time=slice(max_date,min_date))
@@ -127,7 +127,7 @@ def load_commodity_data(
             }
         )[:,1:]
     else:
-        arr = xr.open_dataarray(raw, cache=True, decode_times=True)
+        arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
     arr = arr.sel(time=slice(max_date,min_date))

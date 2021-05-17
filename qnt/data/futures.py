@@ -59,7 +59,7 @@ def load_data(
             }
         )[1:,1:]
     else:
-        arr = xr.open_dataarray(raw, cache=True, decode_times=True)
+        arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
     arr = arr.sel(time=slice(max_date.isoformat(), min_date.isoformat(), 1))

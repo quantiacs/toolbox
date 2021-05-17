@@ -33,7 +33,7 @@ def load_data(
             }
         )[1:,1:]
     else:
-        arr = xr.open_dataarray(raw, cache=True, decode_times=True)
+        arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
     if assets is not None:

@@ -32,16 +32,16 @@ def create_model():
 
 # Builds features for learning.
 def get_features(data):
-    trend = qnta.roc(qnta.lwma(data.sel(field="close"), 70), 1)
+    trend = qnta.roc(qnta.lwma(data.sel(field="close"), 90), 1)
 
-    k, d = qnta.stochastic(data.sel(field="high"), data.sel(field="low"), data.sel(field="close"), 14)
+    k, d = qnta.stochastic(data.sel(field="high"), data.sel(field="low"), data.sel(field="close"), 21)
 
     volatility = qnta.tr(data.sel(field="high"), data.sel(field="low"), data.sel(field="close"))
     volatility = volatility / data.sel(field="close")
-    volatility = qnta.lwma(volatility, 14)
+    volatility = qnta.lwma(volatility, 21)
 
     volume = data.sel(field="vol")
-    volume = qnta.sma(volume, 5) / qnta.sma(volume, 60)
+    volume = qnta.sma(volume, 7) / qnta.sma(volume, 80)
     volume = volume.where(np.isfinite(volume), 0)
 
     # combine features to one array
@@ -129,7 +129,7 @@ def predict(models, data):
 weights = qnbt.backtest_ml(
     train=create_and_train_models,
     predict=predict,
-    train_period=10*365,   # the data length for training in calendar days
+    train_period=4*365,   # the data length for training in calendar days
     retrain_interval=365,  # how often we have to retrain models (calendar days)
     retrain_interval_after_submit=1, # how often retrain models after submit during evaluation (calendar days)
     predict_each_day=False,  # is it necessary to call predict for each day.
