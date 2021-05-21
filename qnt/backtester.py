@@ -206,14 +206,14 @@ def backtest_ml(
 
             result = xr.concat(outputs, dim='time')
             min_date = test_ts[0] - np.timedelta64(60, 'D')
-            data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), min_date=str(min_date)[:10])
+            data = qndata.load_data_by_type(competition_type, min_date=str(min_date)[:10])
             result = qnout.clean(result, data, competition_type)
             result.name = competition_type
             qnout.write(result)
             qnstate.write((t, model, state))
             if analyze:
                 log_info("---")
-                analyze_results(result, data, competition_type, build_plots)
+                analyze_results(result, data, competition_type, build_plots, start_date)
                 if state is None:
                     return result
                 elif collect_all_states:
@@ -346,7 +346,7 @@ def backtest(
 
         log_info("Load data for cleanup and analysis...")
         min_date = time_series[0] - np.timedelta64(60, 'D')
-        data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), min_date=str(min_date)[:10])
+        data = qndata.load_data_by_type(competition_type, min_date=str(min_date)[:10])
         result = qnout.clean(result, data, competition_type)
         result.name = competition_type
         log_info("Write result...")
@@ -355,7 +355,7 @@ def backtest(
 
         if analyze:
             log_info("---")
-            analyze_results(result, data, competition_type, build_plots)
+            analyze_results(result, data, competition_type, build_plots, start_date)
 
         if args_count > 1:
             return result, state
@@ -440,7 +440,7 @@ def unpack_result(result):
     return result, state
 
 
-def analyze_results(output, data, kind, build_plots):
+def analyze_results(output, data, kind, build_plots, start=None):
     log_info("Analyze results...")
 
     if len(output.time) == 0 or len(output.asset) == 0:
@@ -450,6 +450,8 @@ def analyze_results(output, data, kind, build_plots):
     log_info("Check...")
     qnout.check(output, data, kind)
     log_info("---")
+    log_info("Align...")
+    output = qnout.align(output, data, start)
     log_info("Calc global stats...")
     stat_global = qnstat.calc_stat(data, output)
     stat_global = stat_global.loc[output.time[0]:]
