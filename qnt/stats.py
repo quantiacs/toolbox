@@ -563,10 +563,13 @@ def find_missed_dates(output, data):
 
 
 def calc_avg_points_per_year(data: xr.DataArray):
-    if data.name == 'crypto':
-        return round(365.25*24)
-    if data.name in ['stocks', 'stocks_long', 'futures', 'cryptofutures', 'crypto_futures']:
-        return 251
+    if len(data.time) < 251:
+        if data.name == 'crypto':
+            return round(365.25*24)
+        if data.name in [ 'cryptofutures', 'crypto_futures']:
+            return 365
+        if data.name in ['stocks', 'stocks_long', 'futures']:
+            return 251
     t = np.sort(data.coords[ds.TIME].values)
     tp = np.roll(t, 1)
     dh = (t[1:] - tp[1:]).mean().item() / (10 ** 9) / 60 / 60  # avg diff in hours
