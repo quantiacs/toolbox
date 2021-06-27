@@ -21,7 +21,7 @@ def load_data(
     else:
         min_date = max_date - parse_tail(tail)
 
-    uri = "crypto?min_date=" + datetime_to_hours_str(min_date) + "&max_date=" + datetime_to_hours_str(max_date)
+    uri = "cryptodaily/data?min_date=" + datetime_to_hours_str(min_date) + "&max_date=" + datetime_to_hours_str(max_date)
     raw = request_with_retry(uri, None)
     if raw is None or len(raw) < 1:
         arr = xr.DataArray(
@@ -47,11 +47,8 @@ def load_data(
 
     arr = arr.dropna(ds.TIME, 'all')
 
-    arr.name = "crypto"
+    arr.name = "cryptodaily"
     return arr.transpose(*dims)
 
 
 BATCH_LIMIT = 300000
-
-if __name__ == '__main__':
-    print(load_data(['BTC']))

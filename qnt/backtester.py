@@ -53,7 +53,7 @@ def backtest_ml(
     :param retrain_interval: how often to retrain the model(in calendar days)
     :param predict_each_day: perform predict for every day. Set True if you suspect the looking forward
     :param retrain_interval_after_submit:
-    :param competition_type: "futures" | "stocks" | "cryptofutures" | "stocks_long" | "crypto"
+    :param competition_type: "futures" | "stocks" | "cryptofutures" | "stocks_long" | "crypto" | "crypto_daily"
     :param load_data: data load function, accepts tail arg, returns time series and data
     :param lookback_period: the minimal calendar days period for one prediction
     :param test_period:  test period (calendar days)
