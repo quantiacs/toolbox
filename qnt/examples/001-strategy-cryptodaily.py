@@ -14,9 +14,10 @@ import qnt.graph as qngraph
 def strategy(data):
     # calc weights:
     close = data.sel(field="close")
+    is_liquid = data.sel(field='is_liquid')
     ma_slow = qnta.lwma(close, 50)
     ma_fast = qnta.lwma(close, 10)
-    return xr.where(ma_fast > ma_slow, 1, -1)
+    return xr.where(ma_fast > ma_slow, 1, -1) * is_liquid
 
 
 # SINGLE-PASS
