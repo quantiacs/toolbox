@@ -27,9 +27,9 @@ def strategy(data):
 data = qndata.cryptodaily.load_data(min_date="2013-04-01")  # load data
 
 output = strategy(data)
-output = qnout.clean(output, data) # fix common errors
+output = qnout.clean(output, data, 'crypto_daily_long') # fix common errors
 
-qnout.check(output, data) # check that weights are correct:
+qnout.check(output, data, 'crypto_daily_long') # check that weights are correct:
 qnout.write(output) # write results, necessary for submission:
 
 stats = qnstats.calc_stat(data, output.sel(time=slice("2014-01-01", None))) # calc stats
@@ -38,15 +38,15 @@ print(stats.to_pandas().tail())
 # ---
 
 
-# # # MULTI-PASS
-# # # ---
-# # Use this approach to make sure that your strategy is not looking forward.
-# weights = qnbt.backtest(
-#     competition_type="cryptofutures",  # BTC Futures contest
-#     lookback_period=365,  # lookback in calendar days
-#     start_date="2014-01-01",
-#     strategy=strategy,
-#     analyze=True,
-#     build_plots=True
-# )
-# # # ---
+# # MULTI-PASS
+# # ---
+# Use this approach to make sure that your strategy is not looking forward.
+weights = qnbt.backtest(
+    competition_type='crypto_daily_long',  # Crypto Daily Long contest
+    lookback_period=365,  # lookback in calendar days
+    start_date="2014-01-01",
+    strategy=strategy,
+    analyze=True,
+    build_plots=True
+)
+# # ---
