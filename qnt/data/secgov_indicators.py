@@ -197,7 +197,10 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
                         a = 1
                     all_facts_for_recovered_q_values.append([f['period'], f['value']])
 
-                if f['period_length'] is not None and f['report_type'] in ['10-Q', '10-Q/A', '10-K', '10-K/A']:
+                if f['value'] is not None \
+                        and f['period_length'] is not None \
+                        and f['report_type'] in ['10-Q', '10-Q/A',
+                                                 '10-K', '10-K/A']:
                     if (75 < f['period_length'] < 120): q_indexis.append(i)
                     if (340 < f['period_length'] < 380): k_indexis.append(i)
 

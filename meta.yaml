@@ -1,6 +1,6 @@
 package:
   name: "qnt"
-  version: "0.0.261"
+  version: "0.0.262"
 
 source:
   path: .
