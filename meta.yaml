@@ -1,6 +1,6 @@
 package:
   name: "qnt"
-  version: "0.0.264"
+  version: "0.0.265"
 
 source:
   path: .
