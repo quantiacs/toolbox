@@ -77,7 +77,8 @@ def clean(output, data, kind=None, debug=True):
             output = output.ffill('time')
             output = output.fillna(0)
 
-        if kind == "stocks" or kind == "stocks_long" or kind == 'cryptodaily' or kind == 'crypto_daily':
+        if kind == "stocks" or kind == "stocks_long" \
+                or kind =='crypto_daily' or kind =='cryptodaily' or kind == 'crypto_daily_long':
             log_info("Check liquidity...")
             non_liquid = qns.calc_non_liquid(data, output)
             if len(non_liquid.coords[ds.TIME]) > 0:
@@ -98,14 +99,15 @@ def clean(output, data, kind=None, debug=True):
                 add = xr.full_like(add, np.nan)
                 output = xr.concat([output, add], dim='time')
                 output = output.fillna(0)
-                if kind == "stocks" or kind == "stocks_long" or kind == 'cryptodaily' or kind == 'crypto_daily':
+                if kind == "stocks" or kind == "stocks_long" \
+                        or kind=='crypto_daily' or kind=='cryptodaily' or kind == 'crypto_daily_long':
                     output = output.where(data.sel(field='is_liquid') > 0)
                 output = output.dropna('asset', 'all').dropna('time', 'all').fillna(0)
                 output = normalize(output)
             else:
                 log_info("Ok.")
 
-        if kind == 'stocks_long':
+        if kind == 'stocks_long' or kind == 'crypto_daily_long':
             log_info("Check positive positions...")
             neg = output.where(output < 0).dropna(ds.TIME, 'all')
             if len(neg.time) > 0:
@@ -156,7 +158,8 @@ def check(output, data, kind=None):
         output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))
 
     try:
-        if kind == "stocks" or kind == "stocks_long" or kind == 'cryptodaily' or kind == 'crypto_daily':
+        if kind == "stocks" or kind == "stocks_long" \
+                or kind == 'crypto_daily' or kind=='cryptodaily' or kind == 'crypto_daily_long':
             log_info("Check liquidity...")
             non_liquid = qns.calc_non_liquid(data, output)
             if len(non_liquid.coords[ds.TIME]) > 0:
@@ -210,7 +213,7 @@ def check(output, data, kind=None):
                 #     else:
                 #         log_info("Ok.")
 
-                if kind == 'stocks_long':
+                if kind == 'stocks_long' or kind == 'crypto_daily_long':
                     log_info("Check positive positions...")
                     neg = output.where(output < 0).dropna(ds.TIME, 'all')
                     if len(neg.time) > 0:

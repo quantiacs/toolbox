@@ -37,7 +37,7 @@ def load_data(
     :param forward_order:
     :return:
     """
-    track_event("DATA_IMF_CURRENCY_DATA")
+    track_event("DATA_BLOCKCHAINCOM_DATA")
     max_date = parse_date(max_date)
 
     if min_date is not None:
