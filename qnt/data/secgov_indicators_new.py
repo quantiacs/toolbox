@@ -441,6 +441,12 @@ def build_losses_on_extinguishment_of_debt(all_facts, market_data, use_report_da
     return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
 
 
+def build_shares(all_facts, market_data, use_report_date=True):
+    fact_name = 'dei:EntityCommonStockSharesOutstanding'
+    new_name = 'shares'
+    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+
+
 def build_cash_and_cash_equivalent(all_facts, market_data, use_report_date=True):
     fact_name = 'us-gaap:CashAndCashEquivalentsAtCarryingValue'
     new_name = 'cash_and_cash_equivalent'
@@ -519,6 +525,44 @@ def build_nonoperating_income_expense(all_facts, market_data, use_report_date=Tr
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date)
 
 
+def build_cash_and_cash_equivalents(all_facts, market_data, use_report_date=True):
+    fact_name = 'us-gaap:CashAndCashEquivalentsAtCarryingValue'
+    new_name = 'cash_and_cash_equivalents'
+    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+
+
+def build_net_income(all_facts, market_data, use_report_date=True):
+    fact_name = 'us-gaap:NetIncomeLoss'
+    new_name = 'net_income'
+    return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date)
+
+
+def build_eps(all_facts, market_data, use_report_date=True):
+    fact_name = 'us-gaap:EarningsPerShareDiluted'
+    new_name = 'eps'
+    return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date)
+
+
+def build_ev(all_facts, market_data, use_report_date=True):
+    cash = build_cash_and_cash_equivalents(all_facts, market_data, use_report_date)
+    cash['liabilities'] = build_liabilities(all_facts, market_data, use_report_date)
+    cash['market_capitalization'] = build_market_capitalization(all_facts, market_data, use_report_date)
+    cash['ev'] = cash['market_capitalization'] + cash['liabilities'] - cash['cash_and_cash_equivalents']
+    r = cash.drop(columns=['market_capitalization', 'liabilities', 'cash_and_cash_equivalents'])
+    return r
+
+
+def build_market_capitalization(all_facts, market_data, use_report_date=True):
+    shares_df = build_shares(all_facts, market_data, use_report_date)
+    close_price = market_data.sel(field='close')
+    close_price_df = close_price.to_pandas()
+    shares_df['price'] = close_price_df[close_price_df.columns[0]]
+
+    shares_df['market_capitalization'] = shares_df['shares'] * shares_df['price']
+    r = shares_df.drop(columns=['shares', 'price'])
+    return r
+
+
 def build_liabilities(all_facts, market_data, use_report_date=True):
     def get_liabilities():
         fact_name = 'us-gaap:Liabilities'
@@ -580,11 +624,6 @@ def build_liabilities(all_facts, market_data, use_report_date=True):
 
 
 def build_income_before_taxes(all_facts, market_data, use_report_date=True):
-    def get_net_income():
-        fact_name = 'us-gaap:NetIncomeLoss'
-        new_name = 'net_income'
-        return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date)
-
     def get_income_tax():
         fact_name = 'us-gaap:IncomeTaxExpenseBenefit'
         new_name = 'income_tax'
@@ -604,7 +643,7 @@ def build_income_before_taxes(all_facts, market_data, use_report_date=True):
         return net_income + income_tax
 
     income_df = get_income_before_taxes_()
-    income_df['net_income'] = get_net_income()
+    income_df['net_income'] = build_net_income(all_facts, market_data, use_report_date)
     income_df['income_tax'] = get_income_tax()
     income_df['merged'] = income_df.apply(get_merged, axis=1)
     result = income_df.drop(columns=['income_tax', 'net_income', 'income_before_taxes'])
@@ -861,11 +900,7 @@ def build_ebitda_use_income_before_taxes(all_facts, market_data, use_report_date
     r['ebitda_use_income_before_taxes'] = r['income_before_taxes'] + \
                                           r['depreciation_and_amortization'] - \
                                           r['interest']
-    # r['debt'] + \
-    # r['interest_expense_capital_lease']
-    date = '2017-02-03'
-    # date = '2015-04-01'
-    operating_income = r.loc[date] / 1000000
+
     r = r.drop(columns=['income_before_taxes', 'depreciation_and_amortization', 'interest_income_expense_net',
                         'losses_on_extinguishment_of_debt', 'interest_expense_capital_lease', 'debt'])
 
@@ -973,6 +1008,76 @@ def for_test_ebitda(depreciation_and_amortization_df, income_interest_df, losses
     return
 
 
+def build_ebitda_simple(all_facts, market_data, use_report_date=True):
+    operating_income_df = build_operating_income(all_facts, market_data, use_report_date)
+    depreciation_and_amortization_df = build_depreciation_and_amortization(all_facts, market_data, use_report_date)
+
+    operating_income = operating_income_df['operating_income'].fillna(0)
+    depreciation_and_amortization = depreciation_and_amortization_df['depreciation_and_amortization'].fillna(0)
+
+    operating_income_df['ebitda_simple'] = operating_income + depreciation_and_amortization
+
+    r = operating_income_df.drop(columns=['operating_income'])
+    return r
+
+
+def build_ev_divide_by_ebitda(all_facts, market_data, use_report_date=True):
+    ebitda_simple = build_ebitda_simple(all_facts, market_data, use_report_date)
+    ev = build_ev(all_facts, market_data, use_report_date)
+    ebitda_simple['ev_divide_by_ebitda'] = ev['ev'] / ebitda_simple['ebitda_simple']
+    r = ebitda_simple.drop(columns=['ebitda_simple'])
+    return r
+
+
+def build_liabilities_divide_by_ebitda(all_facts, market_data, use_report_date=True):
+    ebitda_simple = build_ebitda_simple(all_facts, market_data, use_report_date)
+    liabilities = build_liabilities(all_facts, market_data, use_report_date)
+    ebitda_simple['liabilities_divide_by_ebitda'] = liabilities['liabilities'] / ebitda_simple['ebitda_simple']
+    r = ebitda_simple.drop(columns=['ebitda_simple'])
+    return r
+
+
+def build_p_e(all_facts, market_data, use_report_date=True):
+    net_income = build_net_income(all_facts, market_data, use_report_date)
+    market_cap = build_market_capitalization(all_facts, market_data, use_report_date)
+    net_income['p_e'] = market_cap['market_capitalization'] / net_income['net_income']
+    r = net_income.drop(columns=['net_income'])
+    return r
+
+
+def build_p_bv(all_facts, market_data, use_report_date=True):
+    equity = build_equity(all_facts, market_data, use_report_date)
+    market_cap = build_market_capitalization(all_facts, market_data, use_report_date)
+    equity['p_bv'] = market_cap['market_capitalization'] / equity['equity']
+    r = equity.drop(columns=['equity'])
+    return r
+
+
+def build_p_s(all_facts, market_data, use_report_date=True):
+    revenues = build_revenues(all_facts, market_data, use_report_date)
+    market_cap = build_market_capitalization(all_facts, market_data, use_report_date)
+    revenues['p_s'] = market_cap['market_capitalization'] / revenues['total_revenue']
+    r = revenues.drop(columns=['total_revenue'])
+    return r
+
+
+def build_ev_s(all_facts, market_data, use_report_date=True):
+    ev = build_ev(all_facts, market_data, use_report_date)
+    revenues = build_revenues(all_facts, market_data, use_report_date)
+    ev['ev_s'] = ev['ev'] / revenues['total_revenue']
+    r = ev.drop(columns=['ev'])
+    return r
+
+
+def build_roe(all_facts, market_data, use_report_date=True):
+    equity = build_equity(all_facts, market_data, use_report_date)
+    net_income = build_net_income(all_facts, market_data, use_report_date)
+
+    net_income['roe'] = net_income['net_income'] / equity['equity']
+    r = net_income.drop(columns=['net_income'])
+    return r
+
+
 global_indicators = {
     'total_revenue': {'facts': ['us-gaap:Revenues'],
                       'build': build_revenues},
@@ -982,14 +1087,23 @@ global_indicators = {
                               'us-gaap:LiabilitiesAndStockholdersEquity'],
                     'build': build_liabilities},
 
-    'cash_and_cash_equivalent': {'facts': ['us-gaap:CashAndCashEquivalentsAtCarryingValue'],
-                                 'build': build_cash_and_cash_equivalent},
-
     'assets': {'facts': ['us-gaap:Assets'],
                'build': build_assets},
 
     'equity': {'facts': ['us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
                'build': build_equity},
+
+    'net_income': {'facts': ['us-gaap:NetIncomeLoss'],
+                   'build': build_net_income},
+
+    'cash_and_cash_equivalents': {'facts': [
+        'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+    ],
+        'build': build_cash_and_cash_equivalents},
+
+    'operating_income': {'facts': [
+        'us-gaap:OperatingIncomeLoss'],
+        'build': build_operating_income},
 
     'income_before_taxes': {'facts': [
         'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
@@ -1002,29 +1116,7 @@ global_indicators = {
         'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest'],
         'build': build_income_before_income_taxes},
 
-    'operating_income': {'facts': [
-        'us-gaap:OperatingIncomeLoss'],
-        'build': build_operating_income},
-
-    'interest_net': {'facts': [
-        'us-gaap:OperatingIncomeLoss',
-        'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments'
-    ],
-        'build': build_interest_net},
-
     'depreciation_and_amortization': {'facts': [
-        # 'us-gaap:DepreciationAndAmortization',
-        # 'us-gaap:DepreciationAmortizationAndAccretionNet',
-        # 'msft:DepreciationAmortizationAndOther',
-        # 'us-gaap:Depreciation',
-        # 'us-gaap:AccumulatedDepreciationDepletionAndAmortizationPropertyPlantAndEquipment',
-        # 'us-gaap:DepreciationDepletionAndAmortization',
-        # 'us-gaap:AmortizationOfIntangibleAssets',
-        # 'us-gaap:AmortizationOfIntangibleAssets',
-        # 'us-gaap:ScheduleofFiniteLivedIntangibleAssetsFutureAmortizationExpenseTableTextBlock',
-        # 'us-gaap:DeferredTaxAssetsDepreciationAndAmortization',
-        # 'us-gaap:FinanceLeaseRightOfUseAssetAmortization',
-        # 'us-gaap:FinanceLeaseRightOfUseAssetAmortization',
         'us-gaap:DepreciationAndAmortization',
         'us-gaap:DepreciationAmortizationAndAccretionNet',
         'us-gaap:DepreciationDepletionAndAmortization',
@@ -1033,6 +1125,12 @@ global_indicators = {
 
     ],
         'build': build_depreciation_and_amortization},
+
+    'interest_net': {'facts': [
+        'us-gaap:OperatingIncomeLoss',
+        'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments'
+    ],
+        'build': build_interest_net},
 
     'income_interest': {'facts': [
         'us-gaap:InvestmentIncomeInterest',
@@ -1058,6 +1156,11 @@ global_indicators = {
     ],
         'build': build_interest_income_expense_net},
 
+    'losses_on_extinguishment_of_debt': {'facts': [
+        'us-gaap:GainsLossesOnExtinguishmentOfDebt',
+    ],
+        'build': build_losses_on_extinguishment_of_debt},
+
     'nonoperating_income_expense': {'facts': [
         'us-gaap:NonoperatingIncomeExpense',
     ],
@@ -1068,9 +1171,27 @@ global_indicators = {
     ],
         'build': build_other_nonoperating_income_expense},
 
+    'eps': {'facts': [
+        'us-gaap:EarningsPerShareDiluted',
+        'us-gaap:EarningsPerShare'
+    ],
+        'build': build_eps},
+
+    'shares': {'facts': [
+        'dei:EntityCommonStockSharesOutstanding',
+    ],
+        'build': build_shares},
+
+    'market_capitalization': {'facts': [
+        'dei:EntityCommonStockSharesOutstanding',
+    ],
+        'build': build_market_capitalization},
+
     'ebitda_use_income_before_taxes': {'facts': [
-        'us-gaap:OperatingIncomeLoss',
         'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
+        'us-gaap:NetIncomeLoss',
+        'us-gaap:IncomeTaxExpenseBenefit',
+        'us-gaap:OperatingIncomeLoss',
         'us-gaap:DepreciationAndAmortization',
         'us-gaap:DepreciationAmortizationAndAccretionNet',
         'us-gaap:DepreciationDepletionAndAmortization',
@@ -1096,14 +1217,89 @@ global_indicators = {
         'us-gaap:InterestExpense',
         'us-gaap:OtherNonoperatingIncomeExpense',
         'us-gaap:InterestIncomeExpenseNet',
-        # 'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
     ],
         'build': build_ebitda_use_operating_income},
 
-    'losses_on_extinguishment_of_debt': {'facts': [
-        'us-gaap:GainsLossesOnExtinguishmentOfDebt',
+    'ebitda_simple': {'facts': [
+        'us-gaap:OperatingIncomeLoss',
+        'us-gaap:DepreciationAndAmortization',
+        'us-gaap:DepreciationAmortizationAndAccretionNet',
+        'us-gaap:DepreciationDepletionAndAmortization',
+        'us-gaap:Depreciation',
+        'us-gaap:AmortizationOfIntangibleAssets',
     ],
-        'build': build_losses_on_extinguishment_of_debt},
+        'build': build_ebitda_simple},
+
+    'ev': {'facts': [
+        'us-gaap:Liabilities',
+        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+        'us-gaap:LiabilitiesAndStockholdersEquity',
+        'dei:EntityCommonStockSharesOutstanding',
+        'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+    ],
+        'build': build_ev},
+
+    'ev_divide_by_ebitda': {'facts': [
+        'us-gaap:OperatingIncomeLoss',
+        'us-gaap:DepreciationAndAmortization',
+        'us-gaap:DepreciationAmortizationAndAccretionNet',
+        'us-gaap:DepreciationDepletionAndAmortization',
+        'us-gaap:Depreciation',
+        'us-gaap:AmortizationOfIntangibleAssets',
+        'us-gaap:Liabilities',
+        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+        'us-gaap:LiabilitiesAndStockholdersEquity',
+        'dei:EntityCommonStockSharesOutstanding',
+        'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+    ],
+        'build': build_ev_divide_by_ebitda},
+
+    'liabilities_divide_by_ebitda': {'facts': [
+        'us-gaap:OperatingIncomeLoss',
+        'us-gaap:DepreciationAndAmortization',
+        'us-gaap:DepreciationAmortizationAndAccretionNet',
+        'us-gaap:DepreciationDepletionAndAmortization',
+        'us-gaap:Depreciation',
+        'us-gaap:AmortizationOfIntangibleAssets',
+        'us-gaap:Liabilities',
+        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+        'us-gaap:LiabilitiesAndStockholdersEquity',
+    ],
+        'build': build_liabilities_divide_by_ebitda},
+
+    'p_e': {'facts': [
+        'us-gaap:NetIncomeLoss',
+        'dei:EntityCommonStockSharesOutstanding',
+    ],
+        'build': build_p_e},
+
+    'p_bv': {'facts': [
+        'dei:EntityCommonStockSharesOutstanding',
+        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'
+    ],
+        'build': build_p_bv},
+
+    'p_s': {'facts': [
+        'dei:EntityCommonStockSharesOutstanding',
+        'us-gaap:Revenues'
+    ],
+        'build': build_p_s},
+
+    'ev_s': {'facts': [
+        'us-gaap:Liabilities',
+        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+        'us-gaap:LiabilitiesAndStockholdersEquity',
+        'dei:EntityCommonStockSharesOutstanding',
+        'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+        'us-gaap:Revenues'
+    ],
+        'build': build_ev_s},
+
+    'roe': {'facts': [
+        'us-gaap:NetIncomeLoss',
+        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+    ],
+        'build': build_roe},
 }
 
 
@@ -1152,9 +1348,10 @@ def load_indicators_for(
         for cik_reports in all_facts:
             for indicator in indicators:
                 if indicator in global_indicators:
-                    res_df = global_indicators[indicator]['build'](cik_reports[1], market_data)
+                    asset_name = all_names[cik_reports[0]]
+                    res_df = global_indicators[indicator]['build'](cik_reports[1], market_data.sel(asset=[asset_name]))
                     df = res_df.unstack().to_xarray().rename({'level_0': 'field', 'level_1': 'time'})
-                    df.name = all_names[cik_reports[0]]
+                    df.name = asset_name
                     indicators_xr.append(df)
 
         return indicators_xr

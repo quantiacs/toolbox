@@ -13,7 +13,7 @@ pd.set_option('display.max_rows', None)
 class TestBaseFundamentalData(unittest.TestCase):
     maxDiff = None
 
-    def test_total_revenue_quarter(self):
+    def test_total_revenue_wmt_quarter(self):
         wmt_indicators = get_data_wmt()
         indicator = wmt_indicators.sel(field='total_revenue_qf').to_pandas()
         print_normed(indicator.T)
@@ -29,7 +29,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(118179, indicator.T.loc['2017-03-30'].max() / 1000000)  # q3
         self.assertEqual(130936, indicator.T.loc['2017-03-31'].max() / 1000000)  # q4
 
-    def test_total_revenue_annual(self):
+    def test_total_revenue_wmt_annual(self):
         wmt_indicators = get_data_wmt()
         indicator = wmt_indicators.sel(field='total_revenue_af').to_pandas()
         print_normed(indicator.T)
@@ -44,7 +44,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(523964, indicator.T.loc['2020-03-20'].max() / 1000000)
         self.assertEqual(559151, indicator.T.loc['2021-03-19'].max() / 1000000)
 
-    def test_total_revenue_ltm(self):
+    def test_total_revenue_wmt_ltm(self):
         wmt_indicators = get_data_wmt()
         indicator = wmt_indicators.sel(field='total_revenue').to_pandas()
         print_normed(indicator.T)
@@ -58,10 +58,12 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(484604, indicator.T.loc['2017-03-30'].max() / 1000000)  # 485873 - 130936 + 129667
         self.assertEqual(485873, indicator.T.loc['2017-03-31'].max() / 1000000)
 
-    def test_liabilities(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='liabilities').to_pandas()
-        print_normed(indicator.T)
+    def test_liabilities_wmt(self):
+        name_indicator = 'liabilities'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 61
         self.assertEqual(126382, indicator.T.loc['2017-03-30'].max() / 1000000)
@@ -79,10 +81,12 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(164965, indicator.T.loc['2021-03-31'].max() / 1000000)
         self.assertEqual(151989, indicator.T.loc['2021-06-04'].max() / 1000000)
 
-    def test_cash_and_cash_equivalents(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='cash_and_cash_equivalent').to_pandas()
-        print_normed(indicator.T)
+    def test_cash_and_cash_equivalents_wmt(self):
+        name_indicator = 'cash_and_cash_equivalents'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 40
         self.assertEqual(8705, indicator.T.loc['2016-03-30 '].max() / 1000000)
@@ -96,9 +100,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(16906, indicator.T.loc['2020-09-02'].max() / 1000000)
         self.assertEqual(14325, indicator.T.loc['2020-12-02'].max() / 1000000)
 
-    def test_assets(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='assets').to_pandas()
+    def test_assets_wmt(self):
+        name_indicator = 'assets'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator.T)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 40
@@ -114,9 +120,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(250863, indicator.T.loc['2020-12-02'].max() / 1000000)
 
     def test_assets_apple(self):
-        wmt_indicators = get_data_new_for(['NASDAQ:AAPL'])
-        indicator = wmt_indicators.sel(field='assets').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:AAPL')
+        name_indicator = 'assets'
+        name_asset = 'NASDAQ:AAPL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(290479, indicator.T.loc['2015-10-28'].max() / 1000000)
         self.assertEqual(321686, indicator.T.loc['2016-10-26'].max() / 1000000)
@@ -126,9 +134,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(323888, indicator.T.loc['2020-10-30'].max() / 1000000)
         self.assertEqual(337158, indicator.T.loc['2021-04-29'].max() / 1000000)
 
-    def test_equity(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='equity').to_pandas()
+    def test_equity_wmt(self):
+        name_indicator = 'equity'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator.T)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 40
@@ -143,20 +153,38 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(81197, indicator.T.loc['2020-09-02'].max() / 1000000)
         self.assertEqual(87504, indicator.T.loc['2020-12-02'].max() / 1000000)
 
-    def test_income_before_taxes(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='income_before_taxes').to_pandas()
-        print_normed(indicator.T)
+    def test_income_before_taxes_wmt(self):
+        name_indicator = 'income_before_taxes'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 38
         self.assertEqual(24799, indicator.T.loc['2015-04-01'].max() / 1000000)
         self.assertEqual(21638, indicator.T.loc['2016-03-30 '].max() / 1000000)
         self.assertEqual(20497, indicator.T.loc['2017-03-31 '].max() / 1000000)
 
-    def test_operating_income(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='operating_income').to_pandas()
-        print_normed(indicator.T)
+    def test_net_income_wmt(self):
+        name_indicator = 'net_income'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
+
+        # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 38
+        self.assertEqual(16363, indicator.T.loc['2015-04-01'].max() / 1000000)
+        self.assertEqual(14694, indicator.T.loc['2016-03-30 '].max() / 1000000)
+        self.assertEqual(13643, indicator.T.loc['2017-03-31 '].max() / 1000000)
+        self.assertEqual(13510, indicator.T.loc['2021-03-19'].max() / 1000000)
+        self.assertEqual(12250, indicator.T.loc['2021-06-04'].max() / 1000000)
+
+    def test_operating_income_wmt(self):
+        name_indicator = 'operating_income'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 38
         self.assertEqual(27147, indicator.T.loc['2015-04-01'].max() / 1000000)
@@ -170,20 +198,24 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(5322 + 5224 + 6059 + 5778, indicator.T.loc['2020-12-02'].max() / 1000000)
         self.assertEqual(24233, indicator.T.loc['2021-06-04'].max() / 1000000)
 
-    def test_interest_net(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='interest_net').to_pandas()
-        print_normed(indicator.T)
+    def test_interest_net_wmt(self):
+        name_indicator = 'interest_net'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 38
         self.assertEqual(2348, indicator.T.loc['2015-04-01'].max() / 1000000)
         self.assertEqual(2467, indicator.T.loc['2016-03-30 '].max() / 1000000)
         self.assertEqual(2267, indicator.T.loc['2017-03-31 '].max() / 1000000)
 
-    def test_depreciation_and_amortization(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='depreciation_and_amortization').to_pandas()
-        print_normed(indicator.T)
+    def test_depreciation_and_amortization_wmt(self):
+        name_indicator = 'depreciation_and_amortization'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 42
         # https://s2.q4cdn.com/056532643/files/doc_financials/2020/ar/Walmart_2020_Annual_Report.pdf 35
@@ -198,10 +230,12 @@ class TestBaseFundamentalData(unittest.TestCase):
         # https://s2.q4cdn.com/056532643/files/doc_financials/2022/q1/Earnings-Release-(FY22-Q1).pdf page 5
         self.assertEqual(11152 + 2661 - 2791, indicator.T.loc['2021-06-04 '].max() / 1000000)
 
-    def test_income_interest(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='income_interest').to_pandas()
-        print_normed(indicator.T)
+    def test_income_interest_wmt(self):
+        name_indicator = 'income_interest'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 42
         self.assertEqual(113, indicator.T.loc['2015-04-01'].max() / 1000000)
@@ -216,10 +250,12 @@ class TestBaseFundamentalData(unittest.TestCase):
         # https://s2.q4cdn.com/056532643/files/doc_financials/2022/q1/Earnings-Release-(FY22-Q1).pdf page 5
         self.assertEqual(121 + 30 - 43, indicator.T.loc['2021-06-04 '].max() / 1000000)
 
-    def test_nonoperating_income_expense(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='nonoperating_income_expense').to_pandas()
-        print_normed(indicator.T)
+    def test_nonoperating_income_expense_wmt(self):
+        name_indicator = 'nonoperating_income_expense'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(-8368, indicator.T.loc['2019-03-28 '].max() / 1000000)
         self.assertEqual(1958, indicator.T.loc['2020-03-20 '].max() / 1000000)
@@ -229,9 +265,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(210 + (-2529 - 721), indicator.T.loc['2021-06-04 '].max() / 1000000)
 
     def test_ebitda_use_operating_income_wmt(self):
-        wmt_indicators = get_data_wmt_new()
-        indicator = wmt_indicators.sel(field='ebitda_use_operating_income').to_pandas()
-        print_normed(indicator.T)
+        name_indicator = 'ebitda_use_operating_income'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 42
         self.assertEqual(36433, indicator.T.loc['2015-04-01'].max() / 1000000)
@@ -246,6 +284,113 @@ class TestBaseFundamentalData(unittest.TestCase):
         # self.assertEqual(5322 + 5224 + 6059 + 5778, total_liabilities.T.loc['2020-12-02'].max() / 1000000)
         self.assertEqual(32323, indicator.T.loc['2021-06-04'].max() / 1000000)
 
+    def test_shares_wmt(self):
+        name_indicator = 'shares'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
+
+        # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 42
+        self.assertEqual(3033.009079, indicator.T.loc['2017-03-31 '].max() / 1000000)
+
+        self.assertEqual(2950.696818, indicator.T.loc['2018-04-02'].max() / 1000000)
+        self.assertEqual(2869.684230, indicator.T.loc['2019-03-28'].max() / 1000000)
+        self.assertEqual(2832.277220, indicator.T.loc['2020-03-20'].max() / 1000000)
+        self.assertEqual(2817.071695, indicator.T.loc['2021-03-19'].max() / 1000000)
+
+        self.assertEqual(2802.145927, indicator.T.loc['2021-06-04'].max() / 1000000)
+
+    def test_market_capitalization_wmt(self):
+        name_indicator = 'market_capitalization'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T)
+
+        # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 42
+        self.assertEqual(218619, round(indicator.T.loc['2017-03-31 '].max() / 1000000))
+
+        self.assertEqual(252432, round(indicator.T.loc['2018-04-02'].max() / 1000000))
+        self.assertEqual(278732, round(indicator.T.loc['2019-03-28'].max() / 1000000))
+        self.assertEqual(322795, round(indicator.T.loc['2020-03-20'].max() / 1000000))
+        self.assertEqual(371121, round(indicator.T.loc['2021-03-19'].max() / 1000000))
+
+        self.assertEqual(397484, round(indicator.T.loc['2021-06-04'].max() / 1000000))
+
+    def test_eps_wmt(self):
+        name_indicator = 'eps'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator.T)
+
+        # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 42
+        self.assertEqual(4.39, indicator.T.loc['2017-03-31 '].max())
+
+        self.assertEqual(3.27, indicator.T.loc['2018-04-02'].max())
+        self.assertEqual(2.2800000000000002, indicator.T.loc['2019-03-28'].max())
+        self.assertEqual(5.1899999999999995, indicator.T.loc['2020-03-20'].max())
+        self.assertEqual(4.739999999999999, indicator.T.loc['2021-03-19'].max())
+
+        self.assertEqual(4.31, indicator.T.loc['2021-06-04'].max())
+
+    def test_ev_wmt(self):
+        name_indicator = 'ev'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T)
+
+        self.assertEqual(330042.2944143203, indicator.T.loc['2017-03-31 '].max() / 1000000)
+        self.assertEqual(526627.39974495, indicator.T.loc['2021-06-04'].max() / 1000000)
+
+    def test_ev_divide_by_ebitda_wmt(self):
+        name_indicator = 'ev_divide_by_ebitda'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator.T)
+
+        self.assertEqual(10.048784996173435, indicator.T.loc['2017-03-31 '].max())
+        self.assertEqual(14.937665572116012, indicator.T.loc['2021-06-04'].max())
+
+    def test_p_bv_wmt(self):
+        name_indicator = 'p_bv'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator.T)
+
+        self.assertEqual(2.714587377094683, indicator.T.loc['2017-03-31 '].max())
+
+    def test_p_s_wmt(self):
+        name_indicator = 'p_s'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator.T)
+
+        self.assertEqual(0.4499515190478176, indicator.T.loc['2017-03-31 '].max())
+
+    def test_ev_s_wmt(self):
+        name_indicator = 'ev_s'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator.T)
+
+        self.assertEqual(0.6792768777320829, indicator.T.loc['2017-03-31 '].max())
+
+    def test_roe_wmt(self):
+        name_indicator = 'roe'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator.T)
+
+        self.assertEqual(0.1694046066927423, indicator.T.loc['2017-03-31 '].max())
+
     # def test_depreciation_and_amortization_microsoft(self):
     #     wmt_indicators = get_data_new_for(['NASDAQ:MSFT'])
     #     ebitda = wmt_indicators.sel(field='depreciation_and_amortization').to_pandas()
@@ -258,9 +403,11 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     self.assertEqual(12796, ebitda.T.loc['2015-04-01'].max() / 1000000)
 
     def test_operating_income_apple(self):
-        wmt_indicators = get_data_new_for(['NASDAQ:AAPL'])
-        indicator = wmt_indicators.sel(field='operating_income').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:AAPL')
+        name_indicator = 'operating_income'
+        name_asset = 'NASDAQ:AAPL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(71230, indicator.T.loc['2015-10-28'].max() / 1000000)
         self.assertEqual(60024, indicator.T.loc['2016-10-26'].max() / 1000000)
@@ -271,9 +418,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(88903, indicator.T.loc['2021-04-29'].max() / 1000000)
 
     def test_depreciation_and_amortization_apple(self):
-        wmt_indicators = get_data_new_for(['NASDAQ:AAPL'])
-        indicator = wmt_indicators.sel(field='depreciation_and_amortization').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:AAPL')
+        name_indicator = 'depreciation_and_amortization'
+        name_asset = 'NASDAQ:AAPL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # https://www.stock-analysis-on.net/NASDAQ/Company/Apple-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(11257, indicator.T.loc['2015-10-28'].max() / 1000000)
@@ -284,9 +433,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(11056, indicator.T.loc['2020-10-30'].max() / 1000000)
 
     def test_interest_expense_apple(self):
-        wmt_indicators = get_data_new_for(['NASDAQ:AAPL'])
-        indicator = wmt_indicators.sel(field='interest_expense').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:AAPL')
+        name_indicator = 'interest_expense'
+        name_asset = 'NASDAQ:AAPL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # https://www.stock-analysis-on.net/NASDAQ/Company/Apple-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(733, indicator.T.loc['2015-10-28'].max() / 1000000)
@@ -297,9 +448,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(2873, indicator.T.loc['2020-10-30'].max() / 1000000)
 
     def test_ebitda_use_operating_income_apple(self):
-        wmt_indicators = get_data_new_for(['NASDAQ:AAPL'])
-        indicator = wmt_indicators.sel(field='ebitda_use_operating_income').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:AAPL')
+        name_indicator = 'ebitda_use_operating_income'
+        name_asset = 'NASDAQ:AAPL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # https://www.stock-analysis-on.net/NASDAQ/Company/Apple-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(84505, indicator.T.loc['2015-10-28'].max() / 1000000)
@@ -311,9 +464,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         # self.assertEqual(128026, indicator.T.loc['2021-04-29'].max() / 1000000)
 
     def test_operating_income_amazon(self):
-        wmt_indicators = get_data_new_for(['NASDAQ:AMZN'])
-        indicator = wmt_indicators.sel(field='operating_income').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:AMZN')
+        name_indicator = 'operating_income'
+        name_asset = 'NASDAQ:AMZN'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # https://www.stock-analysis-on.net/NASDAQ/Company/Apple-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(2233, indicator.T.loc['2016-01-29'].max() / 1000000)
@@ -325,9 +480,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(27775, indicator.T.loc['2021-04-30'].max() / 1000000)
 
     def test_depreciation_and_amortization_amazon(self):
-        wmt_indicators = get_data_new_for(['NASDAQ:AMZN'])
-        indicator = wmt_indicators.sel(field='depreciation_and_amortization').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:AMZN')
+        name_indicator = 'depreciation_and_amortization'
+        name_asset = 'NASDAQ:AMZN'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # https://www.stock-analysis-on.net/NASDAQ/Company/Amazoncom-Inc/Valuation/EV-to-EBITDA
         # self.assertEqual(2233, indicator.T.loc['2016-01-29'].max() / 1000000)
@@ -339,9 +496,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(27397, indicator.T.loc['2021-04-30'].max() / 1000000)
 
     def test_ebitda_use_operating_income_amazon(self):
-        wmt_indicators = get_data_new_for(['NASDAQ:AMZN'])
-        indicator = wmt_indicators.sel(field='ebitda_use_operating_income').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:AMZN')
+        name_indicator = 'ebitda_use_operating_income'
+        name_asset = 'NASDAQ:AMZN'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         # https://www.stock-analysis-on.net/NASDAQ/Company/Amazoncom-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(8308, indicator.T.loc['2016-01-29'].max() / 1000000)
@@ -355,9 +514,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(60104, indicator.T.loc['2021-04-30'].max() / 1000000)
 
     def test_operating_income_fb(self):
-        indicators = get_data_new_for(['NASDAQ:FB'])
-        indicator = indicators.sel(field='operating_income').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:FB')
+        name_indicator = 'operating_income'
+        name_asset = 'NASDAQ:FB'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(12428, indicator.T.loc['2017-02-03'].max() / 1000000)
         self.assertEqual(20202, indicator.T.loc['2018-02-01'].max() / 1000000)
@@ -368,9 +529,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(38156, indicator.T.loc['2021-04-29'].max() / 1000000)
 
     def test_depreciation_and_amortization_fb(self):
-        indicators = get_data_new_for(['NASDAQ:FB'])
-        indicator = indicators.sel(field='depreciation_and_amortization').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:FB')
+        name_indicator = 'depreciation_and_amortization'
+        name_asset = 'NASDAQ:FB'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(2342, indicator.T.loc['2017-02-03'].max() / 1000000)
         self.assertEqual(3025, indicator.T.loc['2018-02-01'].max() / 1000000)
@@ -379,9 +542,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(6862, indicator.T.loc['2021-01-28'].max() / 1000000)
 
     def test_ebitda_use_operating_income_fb(self):
-        indicators = get_data_new_for(['NASDAQ:FB'])
-        indicator = indicators.sel(field='ebitda_use_operating_income').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:FB')
+        name_indicator = 'ebitda_use_operating_income'
+        name_asset = 'NASDAQ:FB'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(14869, indicator.T.loc['2017-02-03'].max() / 1000000)
         self.assertEqual(23625, indicator.T.loc['2018-02-01'].max() / 1000000)
@@ -422,9 +587,11 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     self.assertEqual(32323, indicator.T.loc['2021-06-04'].max() / 1000000)
 
     def test_operating_income_visa(self):
-        indicators = get_data_new_for(['NYSE:V'])
-        indicator = indicators.sel(field='operating_income').to_pandas()
-        print_normed(indicator.T, 'NYSE:V')
+        name_indicator = 'operating_income'
+        name_asset = 'NYSE:V'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(7883, indicator.T.loc['2016-11-15'].max() / 1000000)
         self.assertEqual(12144, indicator.T.loc['2017-11-17'].max() / 1000000)
@@ -433,9 +600,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(14081, indicator.T.loc['2020-11-19'].max() / 1000000)
 
     def test_depreciation_and_amortization_visa(self):
-        indicators = get_data_new_for(['NYSE:V'])
-        indicator = indicators.sel(field='depreciation_and_amortization').to_pandas()
-        print_normed(indicator.T, 'NYSE:V')
+        name_indicator = 'depreciation_and_amortization'
+        name_asset = 'NYSE:V'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(502, indicator.T.loc['2016-11-15'].max() / 1000000)
         self.assertEqual(556, indicator.T.loc['2017-11-17'].max() / 1000000)
@@ -468,11 +637,11 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     self.assertEqual(15073, indicator.T.loc['2020-11-19'].max() / 1000000)
 
     def test_ebitda_use_income_before_taxes_visa(self):
-        import qnt.data    as qndata
-        futures_server = qndata.load_data(min_date="2020-01-01")
-        indicators = get_data_new_for(['NYSE:V'])
-        indicator = indicators.sel(field='ebitda_use_income_before_taxes').to_pandas()
-        print_normed(indicator.T, 'NYSE:V')
+        name_indicator = 'ebitda_use_income_before_taxes'
+        name_asset = 'NYSE:V'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(8941, indicator.T.loc['2016-11-15'].max() / 1000000)
         self.assertEqual(12813, indicator.T.loc['2017-11-17'].max() / 1000000)
@@ -481,9 +650,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(15073, indicator.T.loc['2020-11-19'].max() / 1000000)
 
     def test_income_before_taxes_visa(self):
-        indicators = get_data_new_for(['NYSE:V'])
-        indicator = indicators.sel(field='income_before_taxes').to_pandas()
-        print_normed(indicator.T, 'NYSE:V')
+        name_indicator = 'income_before_taxes'
+        name_asset = 'NYSE:V'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(8012, indicator.T.loc['2016-11-15'].max() / 1000000)
         self.assertEqual(11694, indicator.T.loc['2017-11-17'].max() / 1000000)
@@ -492,9 +663,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(13790, indicator.T.loc['2020-11-19'].max() / 1000000)
 
     def test_operating_income_nvidia(self):
-        indicators = get_data_new_for(['NASDAQ:NVDA'])
-        indicator = indicators.sel(field='operating_income').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:NVDA')
+        name_indicator = 'operating_income'
+        name_asset = 'NASDAQ:NVDA'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(1934, indicator.T.loc['2017-03-01'].max() / 1000000)
         self.assertEqual(3210, indicator.T.loc['2018-02-28'].max() / 1000000)
@@ -514,9 +687,11 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     self.assertEqual(4532, indicator.T.loc['2021-02-26'].max() / 1000000)
 
     def test_interest_income_expense_net_visa(self):
-        indicators = get_data_new_for(['NYSE:V'])
-        indicator = indicators.sel(field='interest_income_expense_net').to_pandas()
-        print_normed(indicator.T, 'NYSE:V')
+        name_indicator = 'interest_income_expense_net'
+        name_asset = 'NYSE:V'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(-427, indicator.T.loc['2016-11-15'].max() / 1000000)
         self.assertEqual(-563, indicator.T.loc['2017-11-17'].max() / 1000000)
@@ -525,9 +700,11 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(-516, indicator.T.loc['2020-11-19'].max() / 1000000)
 
     def test_other_nonoperating_income_expense_visa(self):
-        indicators = get_data_new_for(['NYSE:V'])
-        indicator = indicators.sel(field='other_nonoperating_income_expense').to_pandas()
-        print_normed(indicator.T, 'NYSE:V')
+        name_indicator = 'other_nonoperating_income_expense'
+        name_asset = 'NYSE:V'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(556, indicator.T.loc['2016-11-15'].max() / 1000000)
         self.assertEqual(113, indicator.T.loc['2017-11-17'].max() / 1000000)
@@ -536,13 +713,37 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(225, indicator.T.loc['2020-11-19'].max() / 1000000)
 
     def test_nonoperating_income_expense_amazon(self):
-        wmt_indicators = get_data_new_for(['NASDAQ:AMZN'])
-        indicator = wmt_indicators.sel(field='nonoperating_income_expense').to_pandas()
-        print_normed(indicator.T, 'NASDAQ:AMZN')
+        name_indicator = 'nonoperating_income_expense'
+        name_asset = 'NASDAQ:AMZN'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator.T, name_asset)
 
         self.assertEqual(-294, indicator.T.loc['2017-02-10'].max() / 1000000)
         self.assertEqual(-301, indicator.T.loc['2018-02-02'].max() / 1000000)
         self.assertEqual(-565, indicator.T.loc['2020-01-31'].max() / 1000000)
+
+    def test_liabilities_divide_by_ebitda_wmt(self):
+        name_indicator = 'liabilities_divide_by_ebitda'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print(indicator.T)
+
+        self.assertEqual(3.829061382778889, indicator.T.loc['2017-02-10'].max())
+        self.assertEqual(3.990094166564755, indicator.T.loc['2018-02-02'].max())
+        self.assertEqual(5.015774927801758, indicator.T.loc['2020-01-31'].max())
+
+    def test_p_e_wmt(self):
+        name_indicator = 'p_e'
+        name_asset = 'NYSE:WMT'
+        indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = indicators.sel(field=name_indicator).to_pandas()
+        print(indicator.T)
+
+        self.assertEqual(14.456321204295989, indicator.T.loc['2017-02-10'].max())
+        self.assertEqual(27.045579637679136, indicator.T.loc['2018-02-02'].max())
+        self.assertEqual(22.51529482377764, indicator.T.loc['2020-01-31'].max())
 
     def test_all_indicators_list(self):
         import qnt.data    as qndata
@@ -552,31 +753,46 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(
             ['total_revenue',
              'liabilities',
-             'cash_and_cash_equivalent',
              'assets',
              'equity',
+             'net_income',
+             'cash_and_cash_equivalents',
+             'operating_income',
              'income_before_taxes',
              'income_before_income_taxes',
-             'operating_income',
-             'interest_net',
              'depreciation_and_amortization',
+             'interest_net',
              'income_interest',
              'interest_expense',
              'interest_expense_debt',
              'interest_expense_capital_lease',
              'interest_income_expense_net',
+             'losses_on_extinguishment_of_debt',
              'nonoperating_income_expense',
              'other_nonoperating_income_expense',
+             'eps',
+             'shares',
+             'market_capitalization',
              'ebitda_use_income_before_taxes',
              'ebitda_use_operating_income',
-             'losses_on_extinguishment_of_debt']
+             'ebitda_simple',
+             'ev',
+             'ev_divide_by_ebitda',
+             'liabilities_divide_by_ebitda',
+             'p_e',
+             'p_bv',
+             'p_s',
+             'ev_s',
+             'roe']
 
             , all_indicators)
 
     # def test_ebitda_use_income_before_taxes(self):
-    #     wmt_indicators = get_data_wmt_new()
-    #     indicator = wmt_indicators.sel(field='ebitda_use_income_before_taxes').to_pandas()
-    #     print_normed(indicator.T)
+    #     name_indicator = 'ebitda_use_income_before_taxes'
+    #     name_asset = 'NYSE:WMT'
+    #     indicators = get_data_new_for([name_asset], [name_indicator])
+    #     indicator = indicators.sel(field=name_indicator).to_pandas()
+    #     print_normed(indicator.T, name_asset)
     #
     #     # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 42
     #     self.assertEqual(9173, indicator.T.loc['2015-04-01'].max() / 1000000)
@@ -638,8 +854,6 @@ def get_data_wmt():
     # save_object(fun_indicators, 'fundamental_NYSE_WMT_total_revenue.pkl')
 
     NYSE_WMT = get_data_filter(fun_indicators, ['NYSE:WMT'])
-
-    q = NYSE_WMT.sel(field='total_revenue').to_pandas()
     return NYSE_WMT
 
 
@@ -681,43 +895,7 @@ def test_all():
     return fun_data1
 
 
-def get_data_wmt_new():
-    import qnt.data    as qndata
-    import qnt.data.secgov_indicators_new
-
-    market_data = qndata.load_data(min_date="2010-01-01", max_date="2021-07-28",
-                                   dims=("time", "field", "asset"),
-                                   assets=['NYSE:WMT'],
-                                   forward_order=True)
-
-    indicators_names = ['total_revenue',
-                        'liabilities',
-                        'cash_and_cash_equivalent',
-                        'assets',
-                        'equity',
-                        'income_before_taxes',
-                        'operating_income',
-                        'interest_net',
-                        'depreciation_and_amortization',
-                        'income_interest',
-                        'interest_expense',
-                        'nonoperating_income_expense',
-                        'losses_on_extinguishment_of_debt',
-                        'ebitda_use_operating_income',
-                        'ebitda_use_income_before_taxes',
-                        ]
-    #
-    # indicators_names = ['depreciation_and_amortization', 'ebitda_use_operating_income',
-    #                     'losses_on_extinguishment_of_debt', 'income_interest', 'nonoperating_income_expense']
-
-    # indicators_names = ['InterestExpense']
-
-    indicators = qnt.data.load_indicators_for(market_data, indicators_names)
-
-    return indicators
-
-
-def get_data_new_for(asset_names):
+def get_data_new_for(asset_names, indicators_names):
     import qnt.data    as qndata
     import qnt.data.secgov_indicators_new
 
@@ -725,35 +903,6 @@ def get_data_new_for(asset_names):
                                    dims=("time", "field", "asset"),
                                    assets=asset_names,
                                    forward_order=True)
-
-    indicators_names = ['total_revenue',
-                        'liabilities',
-                        'cash_and_cash_equivalent',
-                        'assets',
-                        'equity',
-                        'income_before_taxes',
-                        'operating_income',
-                        'interest_net',
-                        'depreciation_and_amortization',
-                        'income_interest',
-                        'interest_expense',
-                        'nonoperating_income_expense',
-                        'losses_on_extinguishment_of_debt',
-                        'ebitda_use_operating_income',
-                        'ebitda_use_income_before_taxes',
-                        'other_nonoperating_income_expense',
-                        'income_before_income_taxes',
-                        'interest_income_expense_net',
-                        'income_before_taxes'
-                        ]
-
-    # indicators_names = ['depreciation_and_amortization', 'ebitda_use_operating_income',
-    #                     'losses_on_extinguishment_of_debt', 'income_interest', 'nonoperating_income_expense']
-    #
-    # indicators_names = ['ebitda_use_operating_income', 'operating_income', 'depreciation_and_amortization', 'income_before_income_taxes']
-    # indicators_names = ['nonoperating_income_expense']
-    # indicators_names = ['other_nonoperating_income_expense']
-    # indicators_names = ['income_before_taxes']
 
     indicators = qnt.data.load_indicators_for(market_data, indicators_names)
 
