@@ -592,7 +592,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(23625, indicator.loc['2018-02-01'].max() / 1000000)
         self.assertEqual(29685, indicator.loc['2019-01-31'].max() / 1000000)
         self.assertEqual(30573, indicator.loc['2020-01-30'].max() / 1000000)
-        self.assertEqual(40042, indicator.loc['2021-01-28'].max() / 1000000)  # 39533 bt value
+        self.assertEqual(40062, indicator.loc['2021-01-28'].max() / 1000000)  # 39533 bt value
 
         # self.assertEqual(45393, indicator.loc['2021-04-29'].max() / 1000000)bt value
 
