@@ -41,6 +41,8 @@ def load_indicators(
     idc_arr = idc_arr.sel(time=time_coord)
 
     idc_arr.name = "secgov_indicators"
+    idc_arr = idc_arr.transpose('time', 'field', 'asset')
+
     return idc_arr
 
 
@@ -142,7 +144,6 @@ class SimplePeriodIndicatorBuilder(IndicatorBuilder):
         groups = itertools.groupby(fact_data, self.group_key)
         return dict((g[0], next(g[1])['value']) for g in groups)
 
-
 class PeriodIndicatorBuilder(IndicatorBuilder):
     periods = None
     """    
@@ -193,8 +194,6 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
 
             for i, f in enumerate(facts_in_report):
                 if f['value'] is not None:
-                    if '2010-06-04' == report_date:
-                        a = 1
                     all_facts_for_recovered_q_values.append([f['period'], f['value']])
 
                 if f['value'] is not None \
@@ -215,11 +214,24 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
                 k_value = facts_in_report[k_indexis[-1]]['value']
 
                 if k_value is None:
-                    recovered_q_value = np.nan
+                    q_value_date_all.append([np.nan, report_date])
+                    continue
+
+                if len(q_value_date_all) == 0:
+                    q_value_date_all.append([k_value / 4, report_date])
+                    continue
+
+                previous_report_date = dt.datetime.strptime(q_value_date_all[-1][1], '%Y-%m-%d')
+                dist = (dt.datetime.strptime(report_date, '%Y-%m-%d') - previous_report_date).days
+
+                is_one_year_gap_in_reports = dist > 360
+                if is_one_year_gap_in_reports:
+                    recovered_q_value = k_value / 4
                 else:
                     previous_3q = previous_3_quarters(all_facts_for_recovered_q_values, first_k_date,
                                                       facts_in_report[k_indexis[-1]]['value'])
                     recovered_q_value = k_value - previous_3q
+
                 q_value_date_all.append([recovered_q_value, report_date])
                 continue
 
@@ -249,6 +261,60 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
         return q_value_date_all
 
     def build_ltm(self, fact_data):
+        def get_annual(fact_data):
+            annual = [f for f in fact_data if 340 < f['period_length'] < 380]
+            groups = itertools.groupby(annual, self.group_key)
+            return dict((g[0], next(g[1])['value']) for g in groups)
+
+        def get_merge(annuals, quarters):
+            copy = quarters + []
+            all_times = []
+            for q in quarters:
+                all_times.append(q[1])
+            for time_annual in annuals:
+                time = dt.datetime.strptime(time_annual, '%Y-%m-%d')
+                if time not in all_times:
+                    copy.append([annuals[time_annual], time])
+            return copy
+
+        def remove_gaps(series_dict):
+            if len(series_dict) == 0:
+                return series_dict
+
+            border_quarter_days = 380
+
+            r = []
+            sort_f = lambda f: (f[1])
+            sort_series = sorted(series_dict, key=sort_f)
+            previous_fact = None
+            for fact in sort_series:
+                if previous_fact is None:
+                    previous_fact = fact
+                    r.append(fact)
+                    continue
+
+                previous_date = previous_fact[1]
+                current_date = fact[1]
+
+                dist = (current_date - previous_date).days
+
+                # if dist > border_quarter_days:
+                #     restore_null_value = previous_date + dt.timedelta(days=border_quarter_days)
+                #     r.append([0, restore_null_value])
+
+                r.append(fact)
+                previous_fact = fact
+
+            today = dt.datetime.today()
+            last_fact_date = previous_fact[1]
+            dist_today = (today - last_fact_date).days
+
+            # if dist_today > border_quarter_days:
+            #     restore_null_value = last_fact_date + dt.timedelta(days=border_quarter_days)
+            #     r.append([0, restore_null_value])
+
+            return r
+
         values_for_annual = []
         date_for_annual = []
         value = 0
@@ -259,6 +325,16 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
         quarter_all = sorted(quarter_all, key=sort_type)
         for quarter in quarter_all:
 
+            if len(date_for_annual) != 0:
+                previous_report_date = dt.datetime.strptime(date_for_annual[-1], '%Y-%m-%d')
+                report_date = dt.datetime.strptime(quarter[period], '%Y-%m-%d')
+                dist = (report_date - previous_report_date).days
+
+                is_gap_in_reports = dist > 120  # 120 - randomly selected
+                if is_gap_in_reports:
+                    values_for_annual = []
+                    date_for_annual = []
+
             values_for_annual.append(quarter[value])
             date_for_annual.append(quarter[period])
 
@@ -268,7 +344,17 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
                 result_new.append([total_for_quarter, date_report_appearance])
                 values_for_annual.pop(0)
                 date_for_annual.pop(0)
-        return result_new
+
+        annual = get_annual(fact_data)
+
+        merged = get_merge(annual, result_new)
+
+        rr = remove_gaps(merged)
+
+        sort_f = lambda f: (f[1])
+        sort_merged = sorted(rr, key=sort_f)
+
+        return sort_merged
 
 
 def previous_3_quarters(full_list, start_time, val):

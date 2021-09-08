@@ -1,381 +1,70 @@
-from qnt.data.common import *
-from qnt.data.stocks import load_list
-from qnt.data.secgov import load_facts
-import itertools
-import pandas as pd
 import datetime as dt
-from qnt.log import log_info, log_err
+import itertools
 
+import pandas as pd
 
-class IndicatorBuilder:
-    facts = None
-    alias = None
-    use_report_date = None
-    sort_key = None
-    group_key = None
+from qnt.data.common import *
+from qnt.data.secgov import load_facts
+from qnt.data.secgov_indicators import InstantIndicatorBuilder, PeriodIndicatorBuilder
+from qnt.data.stocks import load_list
 
-    def __init__(self, alias, facts, use_report_date):
-        self.facts = facts
-        self.alias = alias
-        self.use_report_date = use_report_date
-        if (self.use_report_date):
-            self.sort_key = lambda f: (f['report_date'], f['period'], f['report_id'], -self.facts.index(f['fact_name']))
-        else:
-            self.sort_key = lambda f: (f['period'], f['report_date'], f['report_id'], -self.facts.index(f['fact_name']))
 
-    def build_series_dict(self, fact_data):
-        pass
+class CacheHelper:
+    cache = dict()
 
+    def is_in_cache(self, key):
+        if key not in self.cache:
+            return False
+        return True
 
-class InstantIndicatorBuilder(IndicatorBuilder):
+    def get(self, key):
+        # print("get " + key)
+        return self.cache[key].copy(deep=True)
 
-    def __init__(self, alias, facts, use_report_date):
-        super().__init__(alias, facts, use_report_date)
-        self.group_key = (lambda f: f['report_date']) if self.use_report_date else (lambda f: f['period'])
+    def add(self, key, value):
+        # print("add " + key)
+        self.cache[key] = value
 
-    def build_series_dict(self, fact_data):
-        fact_data = sorted(fact_data, key=self.sort_key, reverse=True)
-        groups = itertools.groupby(fact_data, self.group_key)
-        return dict((g[0], next(g[1])['value']) for g in groups)
+    def empty(self):
+        self.cache = dict()
 
+    @staticmethod
+    def get_key_for(all_facts, market_data, fact_name, new_name, use_report_date):
+        close_price = market_data.sel(field='close')
+        close_price_df = close_price.to_pandas()
+        name_ticker = close_price_df.columns[0]
+        return name_ticker + "_" + fact_name + "_" + new_name + "_" + str(use_report_date)
 
-class SimplePeriodIndicatorBuilder(IndicatorBuilder):
-    periods = None
-    """
-    qf, representing quarterly values
-    af, representing annual values
-    saf, representing semi-annual values
-    """
 
-    def __init__(self, alias, facts, use_report_date, periods):
-        super().__init__(alias, facts, use_report_date)
-        self.periods = periods
-        self.group_key = (lambda f: f['report_date']) if self.use_report_date else (lambda f: f['period'][1])
-
-    def build_series_dict(self, fact_data):
-        fact_data = sorted(fact_data, key=self.sort_key, reverse=True)
-
-        # TODO restore missed semi-annual facts
-        # TODO restore missed quarter facts
-        # TODO ltm
-
-        if self.periods == 'qf':
-            fact_data = [f for f in fact_data if 80 < f['period_length'] < 100]
-        elif self.periods == 'saf':
-            fact_data = [f for f in fact_data if 170 < f['period_length'] < 190]
-        elif self.periods == 'af':
-            fact_data = [f for f in fact_data if 355 < f['period_length'] < 375]
-
-        groups = itertools.groupby(fact_data, self.group_key)
-        return dict((g[0], next(g[1])['value']) for g in groups)
-
-
-class PeriodIndicatorBuilder(IndicatorBuilder):
-    periods = None
-    """    
-    qf, representing quarterly values
-    af, representing annual values
-    ltm, representing LTM (last twelve months) values
-    """
-
-    def __init__(self, alias, facts, use_report_date, periods):
-        super().__init__(alias, facts, use_report_date)
-        self.periods = periods
-
-        if self.use_report_date:
-            self.sort_key = lambda f: (f['report_date'], f['period'], f['report_id'], -self.facts.index(f['fact_name']))
-        else:
-            self.sort_key = lambda f: (f['period'], f['report_date'], f['report_id'], -self.facts.index(f['fact_name']))
-
-        self.group_key = (lambda f: f['report_date']) if self.use_report_date else (lambda f: f['period'][1])
-
-    def build_series_dict(self, fact_data):
-        fact_data = sorted(fact_data, key=self.sort_key, reverse=True)
-
-        if self.periods == 'ltm':
-            result = self.build_ltm(fact_data)
-            return dict((item[1].date().isoformat(), item[0]) for item in reversed(result))
-        elif self.periods == 'qf':
-            q_value_date_all = self.build_series_qf(fact_data)
-            return dict((q_value_date[1], q_value_date[0]) for q_value_date in reversed(q_value_date_all))
-        elif self.periods == 'af':
-            fact_data = [f for f in fact_data if 340 < f['period_length'] < 380]
-            groups = itertools.groupby(fact_data, self.group_key)
-            return dict((g[0], next(g[1])['value']) for g in groups)
-
-    def build_series_qf(self, fact_data):
-        reports_all = sorted(fact_data, key=self.sort_key)
-        q_value_date_all = []
-        all_facts_for_recovered_q_values = []
-
-        groups = itertools.groupby(reports_all, self.group_key)
-
-        for g in groups:
-
-            q_indexis = []
-            k_indexis = []
-
-            facts_in_report = list(g[1])
-            report_date = g[0]
-
-            for i, f in enumerate(facts_in_report):
-                if f['value'] is not None:
-                    all_facts_for_recovered_q_values.append([f['period'], f['value']])
-
-                if f['value'] is not None \
-                        and f['period_length'] is not None \
-                        and f['report_type'] in ['10-Q', '10-Q/A',
-                                                 '10-K', '10-K/A']:
-                    if (75 < f['period_length'] < 120): q_indexis.append(i)
-                    if (340 < f['period_length'] < 380): k_indexis.append(i)
-
-            is_Q_report_exist = (len(q_indexis) > 0)
-            is_K_report_exist = (len(k_indexis) > 0)
-            if is_Q_report_exist and is_K_report_exist == False:
-                q_value_date_all.append([facts_in_report[q_indexis[-1]]['value'], report_date])
-                continue
-
-            if is_K_report_exist and is_Q_report_exist == False:
-                first_k_date = dt.datetime.strptime(facts_in_report[k_indexis[-1]]['period'][0], '%Y-%m-%d')
-                k_value = facts_in_report[k_indexis[-1]]['value']
-
-                if k_value is None:
-                    q_value_date_all.append([np.nan, report_date])
-                    continue
-
-                if len(q_value_date_all) == 0:
-                    q_value_date_all.append([k_value / 4, report_date])
-                    continue
-
-                previous_report_date = dt.datetime.strptime(q_value_date_all[-1][1], '%Y-%m-%d')
-                dist = (dt.datetime.strptime(report_date, '%Y-%m-%d') - previous_report_date).days
-
-                is_one_year_gap_in_reports = dist > 360
-                if is_one_year_gap_in_reports:
-                    recovered_q_value = k_value / 4
-                else:
-                    previous_3q = previous_3_quarters(all_facts_for_recovered_q_values, first_k_date,
-                                                      facts_in_report[k_indexis[-1]]['value'])
-                    recovered_q_value = k_value - previous_3q
-
-                q_value_date_all.append([recovered_q_value, report_date])
-                continue
-
-            if is_K_report_exist and is_Q_report_exist:
-                q_fact = facts_in_report[q_indexis[-1]]
-                last_q_date = dt.datetime.strptime(q_fact['period'][1], '%Y-%m-%d')
-
-                k_fact = facts_in_report[k_indexis[-1]]
-                last_k_date = dt.datetime.strptime(k_fact['period'][1], '%Y-%m-%d')
-                first_k_date = dt.datetime.strptime(k_fact['period'][0], '%Y-%m-%d')
-
-                if (last_k_date - dt.timedelta(days=5)) < last_q_date < (last_k_date + dt.timedelta(days=5)):
-                    q_value_date_all.append([q_fact['value'], report_date])
-                else:
-                    k_value = k_fact['value']
-                    if k_value is None:
-                        recovered_q_value = np.nan
-                    else:
-                        previous_3q = previous_3_quarters(all_facts_for_recovered_q_values, first_k_date,
-                                                          facts_in_report[k_indexis[-1]]['value'])
-                        recovered_q_value = k_value - previous_3q
-                    q_value_date_all.append([recovered_q_value, report_date])
-                continue
-
-            q_value_date_all.append([np.nan, report_date])
-
-        return q_value_date_all
-
-    def build_ltm(self, fact_data):
-        def get_annual(fact_data):
-            annual = [f for f in fact_data if 340 < f['period_length'] < 380]
-            groups = itertools.groupby(annual, self.group_key)
-            return dict((g[0], next(g[1])['value']) for g in groups)
-
-        def get_merge(annuals, quarters):
-            copy = quarters + []
-            all_times = []
-            for q in quarters:
-                all_times.append(q[1])
-            for time_annual in annuals:
-                time = dt.datetime.strptime(time_annual, '%Y-%m-%d')
-                if time not in all_times:
-                    copy.append([annuals[time_annual], time])
-            return copy
-
-        def remove_gaps(series_dict):
-            if len(series_dict) == 0:
-                return series_dict
-
-            r = []
-            sort_f = lambda f: (f[1])
-            sort_series = sorted(series_dict, key=sort_f)
-            previous_fact = None
-            for fact in sort_series:
-                if previous_fact is None:
-                    previous_fact = fact
-                    r.append(fact)
-                    continue
-
-                previous_date = previous_fact[1]
-                current_date = fact[1]
-
-                dist = (current_date - previous_date).days
-
-                if dist > 380:
-                    stop = 18
-
-                r.append(fact)
-                previous_fact = fact
-
-            today = dt.datetime.today()
-            previous_date = previous_fact[1]
-            dist_today = (today - previous_date).days
-
-            if dist_today > 380:
-                restore_null_value = previous_date + dt.timedelta(days=75)
-                r.append([0, restore_null_value])
-
-            return r
-
-        values_for_annual = []
-        date_for_annual = []
-        value = 0
-        period = 1
-        result_new = []
-        sort_type = lambda f: (f[period])
-        quarter_all = self.build_series_qf(fact_data)
-        quarter_all = sorted(quarter_all, key=sort_type)
-        for quarter in quarter_all:
-
-            if len(date_for_annual) != 0:
-                previous_report_date = dt.datetime.strptime(date_for_annual[-1], '%Y-%m-%d')
-                report_date = dt.datetime.strptime(quarter[period], '%Y-%m-%d')
-                dist = (report_date - previous_report_date).days
-
-                is_gap_in_reports = dist > 120  # 120 - randomly selected
-                if is_gap_in_reports:
-                    values_for_annual = []
-                    date_for_annual = []
-
-            values_for_annual.append(quarter[value])
-            date_for_annual.append(quarter[period])
-
-            if len(date_for_annual) == 4:
-                total_for_quarter = np.nansum(values_for_annual)
-                date_report_appearance = dt.datetime.strptime(date_for_annual[-1], '%Y-%m-%d')
-                result_new.append([total_for_quarter, date_report_appearance])
-                values_for_annual.pop(0)
-                date_for_annual.pop(0)
-
-        annual = get_annual(fact_data)
-
-        merged = get_merge(annual, result_new)
-
-        rr = remove_gaps(merged)
-
-        sort_f = lambda f: (f[1])
-        sort_merged = sorted(rr, key=sort_f)
-
-        return sort_merged
-
-
-def previous_3_quarters(full_list, start_time, val):
-    ind1 = 0
-    ind2 = 0
-    ind3 = 0
-    ind12 = 0
-    ind23 = 0
-
-    local_index = []
-    # Searching for available timeframes
-    for i, info in enumerate(full_list):
-        left_bound = dt.datetime.strptime(info[0][0], '%Y-%m-%d')
-        right_bound = dt.datetime.strptime(info[0][1], '%Y-%m-%d')
-
-        left_index1 = (left_bound - dt.timedelta(days=10)) < start_time < (left_bound + dt.timedelta(days=10))
-        left_index2 = (left_bound - dt.timedelta(days=110)) < start_time < (left_bound - dt.timedelta(days=70))
-        left_index3 = (left_bound - dt.timedelta(days=210)) < start_time < (left_bound - dt.timedelta(days=150))
-
-        if left_index1:
-            dist = (right_bound - left_bound).days
-
-            if 80 < dist < 120:
-                local_index.extend([info[1], '1'])  # first quarter
-            elif 150 < dist < 200:
-                local_index.extend([info[1], '12'])  # first and second quarters
-            elif 250 < dist < 290:
-                local_index.extend([info[1], '123'])  # first, second and third quarters -> exit
-                return info[1]
-
-        if left_index2:
-
-            dist = (right_bound - left_bound).days
-            if 80 < dist < 100:
-                local_index.extend([info[1], '2'])  # second quarter
-            elif 150 < dist < 200:
-                local_index.extend([info[1], '23'])  # second and third quarters
-
-        if left_index3:
-            dist = (right_bound - left_bound).days
-            if 80 < dist < 120: local_index.extend([info[1], '3'])  # third quarter
-
-    # Now let's collect information about all 3 quarters from the available data
-    if len(local_index) > 0:
-        if '1' in local_index: ind1 = local_index.index('1') - 1
-        if '2' in local_index: ind2 = local_index.index('2') - 1
-        if '3' in local_index: ind3 = local_index.index('3') - 1
-        if '12' in local_index: ind12 = local_index.index('12') - 1
-        if '23' in local_index: ind23 = local_index.index('23') - 1
-
-        if '1' in local_index:
-            if '2' in local_index:
-                if '3' in local_index:
-                    return (val - local_index[ind1] - local_index[ind2] - local_index[ind3])
-
-            if '23' in local_index:
-                return (val - local_index[ind1] - local_index[ind23])
-
-            return (val - local_index[ind1]) / 3
-
-        elif '12' in local_index:
-            if '3' in local_index:
-                return (val - local_index[ind12] - local_index[ind3])
-            else:
-                return (val - local_index[ind12]) / 2
-
-        elif '2' in local_index:
-            if '3' in local_index:
-                return (val - local_index[ind2] - local_index[ind3]) / 2
-            else:
-                return (val - local_index[ind2]) / 3
-
-        elif '23' in local_index:
-            return (val - local_index[ind23]) / 2
-
-        elif '3' in local_index:
-            return (val - local_index[ind3]) / 3
-    else:
-        return val / 4
+global_cache = CacheHelper()
 
 
 def get_ltm(all_facts, market_data, fact_name, new_name, use_report_date=True):
+    key = global_cache.get_key_for(all_facts, market_data, fact_name, new_name, use_report_date)
+    if global_cache.is_in_cache(key):
+        return global_cache.get(key)
     facts = get_filtered(all_facts, [fact_name])
     indicator = PeriodIndicatorBuilder(new_name, [fact_name], use_report_date, 'ltm')
     r = indicator.build_series_dict(
         facts)
 
     result = get_df(r, market_data, new_name)
-    return result
+    global_cache.add(key, result)
+    return result.copy()
 
 
 def get_annual(all_facts, market_data, fact_name, new_name, use_report_date=True):
+    key = global_cache.get_key_for(all_facts, market_data, fact_name, new_name, use_report_date)
+    if global_cache.is_in_cache(key):
+        return global_cache.get(key)
+
     facts = get_filtered(all_facts, [fact_name])
     indicator_df = get_simple_indicator(facts, market_data,
                                         fact_name, use_report_date)
     indicator_df[new_name] = indicator_df[fact_name]
     result = indicator_df.drop(columns=[fact_name])
-    return result
+    global_cache.add(key, result)
+    return result.copy()
 
 
 def get_filtered(all_facts, facts_names, count_days_for_remove_old_period=366):
@@ -391,6 +80,8 @@ def get_filtered_by_period(all_facts, count_days_for_remove_old_period):
     r = []
     for fact in all_facts:
         report_date = fact['report_date']
+        if type(fact['period']) not in [str, list]:
+            continue
         if type(fact['period']) is str:
             period_end = fact['period']
         if type(fact['period']) is list:
@@ -442,6 +133,7 @@ def build_losses_on_extinguishment_of_debt(all_facts, market_data, use_report_da
 
 
 def build_shares(all_facts, market_data, use_report_date=True):
+    # https://www.sec.gov/structureddata/announcement/osd-announcement-110520-scaling-errors
     fact_name = 'dei:EntityCommonStockSharesOutstanding'
     new_name = 'shares'
     return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
@@ -538,9 +230,25 @@ def build_net_income(all_facts, market_data, use_report_date=True):
 
 
 def build_eps(all_facts, market_data, use_report_date=True):
+    def get_merged(row):
+        diluted = row['eps_diluted']
+        if not math.isnan(diluted):
+            return diluted
+
+        return row['eps_simple']
+
     fact_name = 'us-gaap:EarningsPerShareDiluted'
-    new_name = 'eps'
-    return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date)
+    new_name = 'eps_diluted'
+    eps = get_ltm(all_facts, market_data, fact_name, new_name, use_report_date)
+
+    fact_name = 'us-gaap:EarningsPerShare'
+    new_name = 'eps_simple'
+    eps['eps_simple'] = get_ltm(all_facts, market_data, fact_name, new_name, use_report_date)
+
+    eps['eps'] = eps.apply(get_merged, axis=1)
+
+    result = eps.drop(columns=['eps_simple', 'eps_diluted'])
+    return result
 
 
 def build_ev(all_facts, market_data, use_report_date=True):
@@ -723,6 +431,9 @@ def build_depreciation_and_amortization(all_facts, market_data, use_report_date=
 
                 current = facts_in_report_sorted[-1]
 
+                if current['report_type'] not in ['10-K', '10-K/A', '8-K', '10-Q', '10-Q/A']:
+                    continue
+
                 if is_correct_year(current):
                     last_year_value = current['value']
                     result.append([last_year_value, report_date])
@@ -732,6 +443,16 @@ def build_depreciation_and_amortization(all_facts, market_data, use_report_date=
                     continue
 
                 quarter_facts = get_correct_only_quarter_facts(facts_in_report_sorted)
+
+                if len(quarter_facts) == 0:
+                    continue
+
+                is_one_q_report = len(quarter_facts) == 1
+                if is_one_q_report:
+                    last_year_value = 0
+                    result.append([current['value'], report_date])
+                    continue
+
                 previous = quarter_facts[-2]
 
                 if is_correct_first_quarter(current) and is_correct_first_quarter(previous):
@@ -901,21 +622,16 @@ def build_ebitda_use_income_before_taxes(all_facts, market_data, use_report_date
                                           r['depreciation_and_amortization'] - \
                                           r['interest']
 
-    r = r.drop(columns=['income_before_taxes', 'depreciation_and_amortization', 'interest_income_expense_net',
-                        'losses_on_extinguishment_of_debt', 'interest_expense_capital_lease', 'debt'])
+    r = r.drop(columns=['interest',
+                        'interest_expense',
+                        'income_interest',
+                        'income_before_taxes',
+                        'depreciation_and_amortization',
+                        'interest_income_expense_net',
+                        'losses_on_extinguishment_of_debt',
+                        'interest_expense_capital_lease',
+                        'debt'])
 
-    return r
-
-
-def build_ebitda_experiment(all_facts, market_data, use_report_date=True):
-    income_before_taxes_df = build_income_before_taxes(all_facts, market_data, use_report_date)
-    depreciation_and_amortization_df = build_depreciation_and_amortization(all_facts, market_data, use_report_date)
-    interest_net_df = build_interest_net(all_facts, market_data, use_report_date)
-    r = income_before_taxes_df.copy()
-    r['ebitda_use_income_before_taxes'] = income_before_taxes_df['income_before_taxes'] + \
-                                          depreciation_and_amortization_df[
-                                              'depreciation_and_amortization'] - interest_net_df['interest_net']
-    r = r.drop(columns=['income_before_taxes'])
     return r
 
 
@@ -923,10 +639,6 @@ def build_ebitda_use_operating_income(all_facts, market_data, use_report_date=Tr
     def get_merged_interest(row):
         interest_expense = row['interest_expense']
         income_interest = row['income_interest']
-        # interest_income_expense_net = row['interest_income_expense_net']
-        #
-        # if not math.isnan(interest_income_expense_net):
-        #     return interest_income_expense_net
 
         if not math.isnan(interest_expense):
             return interest_expense
@@ -956,15 +668,10 @@ def build_ebitda_use_operating_income(all_facts, market_data, use_report_date=Tr
     interest_expense_df['interest_income_expense_net'] = interest_income_expense_net_df['interest_income_expense_net']
     interest_expense_df['interest'] = interest_expense_df.apply(get_merged_interest, axis=1)
 
-    income_before_taxes_df = build_income_before_taxes(all_facts, market_data, use_report_date)
-
     operating_income = operating_income_df['operating_income'].fillna(0)
     depreciation_and_amortization = depreciation_and_amortization_df['depreciation_and_amortization'].fillna(0)
     onoperating_income_expense = onoperating_income_expense_df['nonoperating_income_expense'].fillna(0)
     losses_on_extinguishment_of_debt = losses_on_extinguishment_of_debt_df['losses_on_extinguishment_of_debt'].fillna(0)
-    interest_income_expense_net = interest_income_expense_net_df['interest_income_expense_net'].fillna(0)
-    other_nonoperating_income_expense = other_nonoperating_income_expense_df[
-        'other_nonoperating_income_expense'].fillna(0)
     merged_interest_expense = interest_expense_df['interest'].fillna(0)
 
     r['ebitda_use_operating_income'] = operating_income + \
@@ -973,39 +680,32 @@ def build_ebitda_use_operating_income(all_facts, market_data, use_report_date=Tr
                                        onoperating_income_expense + \
                                        merged_interest_expense
 
-    # r['ebitda_use_operating_income'] = operating_income + \
-    #                                    depreciation_and_amortization + \
-    #                                    losses_on_extinguishment_of_debt + \
-    #                                    onoperating_income_expense + \
-    #                                    merged_interest_expense + \
-    #                                    onoperating_income_expense - interest_income_expense_net
+
+    def for_test_ebitda(depreciation_and_amortization_df, income_interest_df, losses_on_extinguishment_of_debt_df,
+                        onoperating_income_expense_df, operating_income_df, r, interest_expense_df,
+                        merged_interest_expense_df):
+        date = '2017-03-01'
+        date = '2021-01-28'
+        operating_income = operating_income_df.loc[date].max() / 1000000
+        depreciation_and_amortization = depreciation_and_amortization_df.loc[date].max() / 1000000
+        income_interest = income_interest_df.loc[date].max() / 1000000
+        onoperating_income_expense = onoperating_income_expense_df.loc[date].max() / 1000000
+        losses_on_extinguishment_of_debt = losses_on_extinguishment_of_debt_df.loc[date].max() / 1000000
+        interest_expense = interest_expense_df.loc[date].max() / 1000000
+        merged_interest_expense = merged_interest_expense_df.loc[date].max() / 1000000
+        operating_income_plys_amortization = operating_income + depreciation_and_amortization
+        income_interest_onoperating_income_expense = income_interest + onoperating_income_expense
+        # income_before_taxes = income_before_taxes_df.loc[date].max() / 1000000
+        sum_interest = income_interest - interest_expense
+        sum = r['ebitda_use_operating_income'].loc[date].max() / 1000000
+        return
 
     for_test_ebitda(depreciation_and_amortization_df, income_interest_df, losses_on_extinguishment_of_debt_df,
                     onoperating_income_expense_df, operating_income_df, r, interest_expense_df, merged_interest_expense,
-                    income_before_taxes_df)
+                    )
 
     r = r.drop(columns=['operating_income'])
     return r
-
-
-def for_test_ebitda(depreciation_and_amortization_df, income_interest_df, losses_on_extinguishment_of_debt_df,
-                    onoperating_income_expense_df, operating_income_df, r, interest_expense_df,
-                    merged_interest_expense_df, income_before_taxes_df):
-    date = '2017-03-01'
-    date = '2016-03-30'
-    operating_income = operating_income_df.loc[date].max() / 1000000
-    depreciation_and_amortization = depreciation_and_amortization_df.loc[date].max() / 1000000
-    income_interest = income_interest_df.loc[date].max() / 1000000
-    onoperating_income_expense = onoperating_income_expense_df.loc[date].max() / 1000000
-    losses_on_extinguishment_of_debt = losses_on_extinguishment_of_debt_df.loc[date].max() / 1000000
-    interest_expense = interest_expense_df.loc[date].max() / 1000000
-    merged_interest_expense = merged_interest_expense_df.loc[date].max() / 1000000
-    operating_income_plys_amortization = operating_income + depreciation_and_amortization
-    income_interest_onoperating_income_expense = income_interest + onoperating_income_expense
-    income_before_taxes = income_before_taxes_df.loc[date].max() / 1000000
-    sum_interest = income_interest - interest_expense
-    sum = r['ebitda_use_operating_income'].loc[date].max() / 1000000
-    return
 
 
 def build_ebitda_simple(all_facts, market_data, use_report_date=True):
@@ -1037,44 +737,44 @@ def build_liabilities_divide_by_ebitda(all_facts, market_data, use_report_date=T
     return r
 
 
-def build_p_e(all_facts, market_data, use_report_date=True):
+def build_p_divide_by_e(all_facts, market_data, use_report_date=True):
     net_income = build_net_income(all_facts, market_data, use_report_date)
     market_cap = build_market_capitalization(all_facts, market_data, use_report_date)
-    net_income['p_e'] = market_cap['market_capitalization'] / net_income['net_income']
+    net_income['p_divide_by_e'] = market_cap['market_capitalization'] / net_income['net_income']
     r = net_income.drop(columns=['net_income'])
     return r
 
 
-def build_p_bv(all_facts, market_data, use_report_date=True):
+def build_p_divide_by_bv(all_facts, market_data, use_report_date=True):
     equity = build_equity(all_facts, market_data, use_report_date)
     market_cap = build_market_capitalization(all_facts, market_data, use_report_date)
-    equity['p_bv'] = market_cap['market_capitalization'] / equity['equity']
+    equity['p_divide_by_bv'] = market_cap['market_capitalization'] / equity['equity']
     r = equity.drop(columns=['equity'])
     return r
 
 
-def build_p_s(all_facts, market_data, use_report_date=True):
+def build_p_divide_by_s(all_facts, market_data, use_report_date=True):
     revenues = build_revenues(all_facts, market_data, use_report_date)
     market_cap = build_market_capitalization(all_facts, market_data, use_report_date)
-    revenues['p_s'] = market_cap['market_capitalization'] / revenues['total_revenue']
+    revenues['p_divide_by_s'] = market_cap['market_capitalization'] / revenues['total_revenue']
     r = revenues.drop(columns=['total_revenue'])
     return r
 
 
-def build_ev_s(all_facts, market_data, use_report_date=True):
+def build_ev_divide_by_s(all_facts, market_data, use_report_date=True):
     ev = build_ev(all_facts, market_data, use_report_date)
     revenues = build_revenues(all_facts, market_data, use_report_date)
-    ev['ev_s'] = ev['ev'] / revenues['total_revenue']
+    ev['ev_divide_by_s'] = ev['ev'] / revenues['total_revenue']
     r = ev.drop(columns=['ev'])
     return r
 
 
 def build_roe(all_facts, market_data, use_report_date=True):
-    equity = build_equity(all_facts, market_data, use_report_date)
     net_income = build_net_income(all_facts, market_data, use_report_date)
+    net_income['equity'] = build_equity(all_facts, market_data, use_report_date)
 
-    net_income['roe'] = net_income['net_income'] / equity['equity']
-    r = net_income.drop(columns=['net_income'])
+    net_income['roe'] = net_income['net_income'] / net_income['equity']
+    r = net_income.drop(columns=['net_income', 'equity'])
     return r
 
 
@@ -1267,25 +967,25 @@ global_indicators = {
     ],
         'build': build_liabilities_divide_by_ebitda},
 
-    'p_e': {'facts': [
+    'p_divide_by_e': {'facts': [
         'us-gaap:NetIncomeLoss',
         'dei:EntityCommonStockSharesOutstanding',
     ],
-        'build': build_p_e},
+        'build': build_p_divide_by_e},
 
-    'p_bv': {'facts': [
+    'p_divide_by_bv': {'facts': [
         'dei:EntityCommonStockSharesOutstanding',
         'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'
     ],
-        'build': build_p_bv},
+        'build': build_p_divide_by_bv},
 
-    'p_s': {'facts': [
+    'p_divide_by_s': {'facts': [
         'dei:EntityCommonStockSharesOutstanding',
         'us-gaap:Revenues'
     ],
-        'build': build_p_s},
+        'build': build_p_divide_by_s},
 
-    'ev_s': {'facts': [
+    'ev_divide_by_s': {'facts': [
         'us-gaap:Liabilities',
         'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
         'us-gaap:LiabilitiesAndStockholdersEquity',
@@ -1293,7 +993,7 @@ global_indicators = {
         'us-gaap:CashAndCashEquivalentsAtCarryingValue',
         'us-gaap:Revenues'
     ],
-        'build': build_ev_s},
+        'build': build_ev_divide_by_s},
 
     'roe': {'facts': [
         'us-gaap:NetIncomeLoss',
@@ -1303,23 +1003,43 @@ global_indicators = {
 }
 
 
-def get_all_indicators():
+def get_all_indicator_names():
     return list(global_indicators.keys())
 
 
-def load_indicators_for(
-        market_data,
-        indicators=None,
+def get_complex_indicator_names():
+    return ['ebitda_simple',
+            'ev',
+            'ev_divide_by_ebitda',
+            'liabilities_divide_by_ebitda',
+            'p_divide_by_e',
+            'p_divide_by_bv',
+            'p_divide_by_s',
+            'ev_divide_by_s',
+            'roe']
+
+
+def load_fundamental_indicators_for(
+        stocks_market_data,
+        indicator_names=None,
 ):
+    if indicator_names is None:
+        indicator_names = get_all_indicator_names()
+
+    global_cache.empty()
     fill_strategy = lambda xarr: xarr.ffill('time')
     start_date_offset = datetime.timedelta(days=365 * 2)
 
-    def get_ciks(market_data):
-        asset_names = market_data.asset.to_pandas().to_list()
-        time_coord = market_data.time
-
+    def get_assets(time_coord):
         # assets = load_list(min_date=time_coord.min().values, max_date=time_coord.max().values)
         assets = load_list(min_date="2000-12-01", max_date=time_coord.max().values)
+        return assets
+
+    def get_ciks(market_data):
+        asset_names = market_data.asset.to_pandas().to_list()
+
+        assets = get_assets(market_data.time)
+
         assets_for_load = []
         for asset in assets:
             if asset['id'] in asset_names and asset.get('cik') is not None:
@@ -1343,25 +1063,38 @@ def load_indicators_for(
                                       group_by_cik=True):
             yield cik_reports
 
-    def build_indicators(all_facts, market_data, indicators, all_names):
+    def build_indicators(all_facts, market_data, indicator_names, all_names):
         indicators_xr = []
+        all_indicators_for_asset_df = None
         for cik_reports in all_facts:
-            for indicator in indicators:
+            asset_name = all_names[cik_reports[0]]
+            for indicator in indicator_names:
                 if indicator in global_indicators:
-                    asset_name = all_names[cik_reports[0]]
-                    res_df = global_indicators[indicator]['build'](cik_reports[1], market_data.sel(asset=[asset_name]))
-                    df = res_df.unstack().to_xarray().rename({'level_0': 'field', 'level_1': 'time'})
-                    df.name = asset_name
-                    indicators_xr.append(df)
+                    if all_indicators_for_asset_df is None:
+                        all_indicators_for_asset_df = global_indicators[indicator]['build'](cik_reports[1],
+                                                                                            market_data.sel(
+                                                                                                asset=[asset_name]))
+                    else:
+                        all_indicators_for_asset_df[indicator] = global_indicators[indicator]['build'](cik_reports[1],
+                                                                                                       market_data.sel(
+                                                                                                           asset=[
+                                                                                                               asset_name]))
+            if all_indicators_for_asset_df is None:
+                continue
+
+            df = all_indicators_for_asset_df.unstack().to_xarray().rename({'level_0': 'field', 'level_1': 'time'})
+            df.name = asset_name
+            indicators_xr.append(df)
+            all_indicators_for_asset_df = None
+            global_cache.empty()
 
         return indicators_xr
 
     def get_names(market_data):
         asset_names = market_data.asset.to_pandas().to_list()
-        time_coord = market_data.time
 
-        # assets = load_list(min_date=time_coord.min().values, max_date=time_coord.max().values)
-        assets = load_list(min_date="2000-12-01", max_date=time_coord.max().values)
+        assets = get_assets(market_data.time)
+
         assets_for_load = {}
         for asset in assets:
             if asset['id'] in asset_names and asset.get('cik') is not None:
@@ -1369,15 +1102,15 @@ def load_indicators_for(
 
         return assets_for_load
 
-    time_coord = market_data.time
+    time_coord = stocks_market_data.time
     min_date = pd.Timestamp(time_coord.min().values).to_pydatetime().date() - parse_tail(start_date_offset)
     max_date = pd.Timestamp(time_coord.max().values).to_pydatetime().date()
-    ciks = get_ciks(market_data)
-    facts_names = get_us_gaap_facts_for_load(indicators)
+    ciks = get_ciks(stocks_market_data)
+    facts_names = get_us_gaap_facts_for_load(indicator_names)
     all_facts = load_all_facts(ciks, facts_names, min_date, max_date)
 
-    all_names = get_names(market_data)
-    builded_indicators = build_indicators(all_facts, market_data, indicators, all_names)
+    all_names = get_names(stocks_market_data)
+    builded_indicators = build_indicators(all_facts, stocks_market_data, indicator_names, all_names)
 
     if len(builded_indicators) is 0:
         return None  # TODO
@@ -1390,45 +1123,5 @@ def load_indicators_for(
     idc_arr = idc_arr.sel(time=time_coord)
 
     idc_arr.name = "secgov_indicators"
+    idc_arr = idc_arr.transpose('time', 'field', 'asset')
     return idc_arr
-    #
-    # for (cik, inds) in builded_indicators:
-    #     items = inds.items()
-    #     series = [pd.Series(v if len(v) > 0 else {min_date.isoformat(): np.nan}, dtype=np.float64, name=k)
-    #               for (k, v) in items]
-    #     df = pd.concat(series, axis=1)
-    #     df.index = df.index.astype(dtype=time_coord.dtype, copy=False)
-    #     df = df.unstack().to_xarray().rename({'level_0': 'field', 'level_1': 'time'})
-    #     df.name = all_names[cik]
-    #     dfs.append(df)
-    #
-    # if len(dfs) is 0:
-    #     return None  # TODO
-    #
-    # idc_arr = xr.concat(dfs, pd.Index([d.name for d in dfs], name='asset'))
-    #
-    # idc_arr = xr.align(idc_arr, time_coord, join='outer')[0]
-    # idc_arr = idc_arr.sel(time=np.sort(idc_arr.time.values))
-    # idc_arr = fill_strategy(idc_arr)
-    # idc_arr = idc_arr.sel(time=time_coord)
-    #
-    # idc_arr.name = "secgov_indicators"
-    # return idc_arr
-
-    # Liabilities = InstantIndicatorBuilder('Liabilities', ['us-gaap:Liabilities'], use_report_date).build_series_dict(
-    #     facts)
-    # LiabilitiesCurrent = InstantIndicatorBuilder('LiabilitiesCurrent', ['us-gaap:LiabilitiesCurrent'],
-    #                                              use_report_date).build_series_dict(facts)
-    # DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent = InstantIndicatorBuilder(
-    #     'DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent',
-    #     ['us-gaap:DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent'], use_report_date).build_series_dict(facts)
-
-    # Liabilities_df = get_df(Liabilities, market_data, 'us-gaap:Liabilities')
-    # LiabilitiesCurrent_df = get_df(LiabilitiesCurrent, market_data, 'us-gaap:LiabilitiesCurrent')
-    # LongTermDebtNoncurrent_df = get_df(LongTermDebtNoncurrent, market_data, 'us-gaap:LongTermDebtNoncurrent')
-    # # DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent_df = get_df(DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent,
-    # #                                                              market_data,
-    # #                                                              'us-gaap:DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent')
-    # result = Liabilities_df.copy()
-    # result['liabilities'] = Liabilities_df['us-gaap:Liabilities'] + LiabilitiesCurrent_df['us-gaap:LiabilitiesCurrent']
-    # r = result.drop(columns=['us-gaap:Liabilities'])
