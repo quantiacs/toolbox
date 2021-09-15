@@ -335,6 +335,44 @@ class TestBaseFundamentalData(unittest.TestCase):
 
         self.assertEqual(4.31, indicator.loc['2021-06-04'].max())
 
+    def test_debt_wmt(self):
+        name_indicator = 'debt'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(1099 + 2256 + 565 + 36015 + 6003, indicator.loc['2017-03-31 '].max() / 1000000)
+
+        # https://www.sec.gov/cgi-bin/browse-edgar?filenum=001-06991&action=getcompany
+
+        # <us-gaap:OperatingLeaseLiabilityCurrent contextRef="FI2020Q4" decimals="-6" id="d14043724e1814-wk-Fact-792744BB9A725D81B56097016860A62A" unitRef="usd">1793000000</us-gaap:OperatingLeaseLiabilityCurrent>
+        self.assertEqual(72433, indicator.loc['2020-03-20 '].max() / 1000000)
+
+    def test_net_debt_divide_by_ebitda_wmt(self):
+        name_indicator = 'net_debt_divide_by_ebitda'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator)
+
+        self.assertEqual(1.1895932285957862, indicator.loc['2017-03-31 '].max())
+        self.assertEqual(1.995499920773253, indicator.loc['2020-03-20 '].max())
+
+    def test_net_debt_wmt(self):
+        name_indicator = 'net_debt'
+        name_asset = 'NYSE:WMT'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(39071, indicator.loc['2017-03-31 '].max() / 1000000)
+
+        # https://www.sec.gov/cgi-bin/browse-edgar?filenum=001-06991&action=getcompany
+
+        # <us-gaap:OperatingLeaseLiabilityCurrent contextRef="FI2020Q4" decimals="-6" id="d14043724e1814-wk-Fact-792744BB9A725D81B56097016860A62A" unitRef="usd">1793000000</us-gaap:OperatingLeaseLiabilityCurrent>
+        self.assertEqual(62968, indicator.loc['2020-03-20 '].max() / 1000000)
+
     def test_ev_wmt(self):
         name_indicator = 'ev'
         name_asset = 'NYSE:WMT'
@@ -342,8 +380,8 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator)
 
-        self.assertEqual(330042.2944143203, indicator.loc['2017-03-31 '].max() / 1000000)
-        self.assertEqual(526627.39974495, indicator.loc['2021-06-04'].max() / 1000000)
+        self.assertEqual(257690.2944143203, indicator.loc['2017-03-31 '].max() / 1000000)
+        self.assertEqual(437460.39974495, indicator.loc['2021-06-04'].max() / 1000000)
 
     def test_ev_divide_by_ebitda_wmt(self):
         name_indicator = 'ev_divide_by_ebitda'
@@ -352,8 +390,8 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
-        self.assertEqual(10.048784996173435, indicator.loc['2017-03-31 '].max())
-        self.assertEqual(14.937665572116012, indicator.loc['2021-06-04'].max())
+        self.assertEqual(7.845886445448797, indicator.loc['2017-03-31 '].max())
+        self.assertEqual(12.40846404041838, indicator.loc['2021-06-04'].max())
 
     def test_p_divide_by_bv_wmt(self):
         name_indicator = 'p_divide_by_bv'
@@ -380,7 +418,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
-        self.assertEqual(0.6792768777320829, indicator.loc['2017-03-31 '].max())
+        self.assertEqual(0.5303655367026369, indicator.loc['2017-03-31 '].max())
 
     def test_roe_wmt(self):
         name_indicator = 'roe'
@@ -390,6 +428,218 @@ class TestBaseFundamentalData(unittest.TestCase):
         print(indicator.T)
 
         self.assertEqual(0.1694046066927423, indicator.loc['2017-03-31 '].max())
+
+    def test_equity_dal(self):
+        # https://www.sec.gov/cgi-bin/viewer?action=view&cik=27904&accession_number=0000027904-21-000003&xbrl_type=v#
+        name_indicator = 'equity'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator)
+
+        self.assertEqual(12287000000, indicator.loc['2017-02-13 '].max())
+        self.assertEqual(13910000000, indicator.loc['2018-02-23 '].max())
+        self.assertEqual(13687000000, indicator.loc['2019-02-15'].max())
+        self.assertEqual(15358000000, indicator.loc['2020-02-13'].max())
+        self.assertEqual(1534000000, indicator.loc['2021-02-18'].max())
+
+    def test_net_income_dal(self):
+        # https://www.sec.gov/cgi-bin/viewer?action=view&cik=27904&accession_number=0000027904-21-000003&xbrl_type=v#
+        name_indicator = 'net_income'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator)
+
+        self.assertEqual(4373000000, indicator.loc['2017-02-13 '].max())
+        self.assertEqual(3577000000, indicator.loc['2018-02-23 '].max())
+        self.assertEqual(3935000000, indicator.loc['2019-02-15'].max())
+        self.assertEqual(4767000000, indicator.loc['2020-02-13'].max())
+        self.assertEqual(-12385000000, indicator.loc['2021-02-18'].max())
+
+    def test_ev_dal(self):
+        name_indicator = 'ev'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(40665.37813828, indicator.loc['2017-02-13 '].max() / 1000000)
+        self.assertEqual(43986.58811868, indicator.loc['2018-02-23 '].max() / 1000000)
+        self.assertEqual(42684, round(indicator.loc['2019-02-15'].max() / 1000000))
+        self.assertEqual(45924, round(indicator.loc['2020-02-13'].max() / 1000000))
+        self.assertEqual(43382, round(indicator.loc['2021-02-18'].max() / 1000000))
+
+    def test_ebitda_simple_dal(self):
+        name_indicator = 'ebitda_simple'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(8854, indicator.loc['2017-02-13 '].max() / 1000000)
+        self.assertEqual(8349, indicator.loc['2018-02-23 '].max() / 1000000)
+        self.assertEqual(7593, indicator.loc['2019-02-15'].max() / 1000000)
+        self.assertEqual(9199, indicator.loc['2020-02-13'].max() / 1000000)
+        self.assertEqual(-10157, indicator.loc['2021-02-18'].max() / 1000000)
+
+    def test_ev_divide_by_ebitda_dal(self):
+        name_indicator = 'ev_divide_by_ebitda'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator)
+
+        self.assertEqual(5, round(indicator.loc['2017-02-13 '].max()))
+        self.assertEqual(5, round(indicator.loc['2018-02-23 '].max()))
+        self.assertEqual(5.62146332224944, indicator.loc['2019-02-15'].max())
+        self.assertEqual(5, round(indicator.loc['2020-02-13'].max()))
+        self.assertEqual(-4, round(indicator.loc['2021-02-18'].max()))
+
+    def test_net_debt_divide_by_ebitda_dal(self):
+        name_indicator = 'net_debt_divide_by_ebitda'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator)
+
+        self.assertEqual(0, round(indicator.loc['2017-02-13 '].max()))
+        self.assertEqual(1, round(indicator.loc['2018-02-23 '].max()))
+        self.assertEqual(1.053997102594495, indicator.loc['2019-02-15'].max())
+        self.assertEqual(1, round(indicator.loc['2020-02-13'].max()))
+        self.assertEqual(-1, round(indicator.loc['2021-02-18'].max()))
+
+    def test_roe_dal(self):
+        name_indicator = 'roe'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator)
+
+        self.assertEqual(4373000000 / 12287000000, indicator.loc['2017-02-13 '].max())
+
+    def test_p_divide_by_e_dal(self):
+        name_indicator = 'p_divide_by_e'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print(indicator)
+
+        self.assertEqual(8.365510665053739, indicator.loc['2017-02-13 '].max())
+
+    def test_debt_dal(self):
+        name_indicator = 'debt'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(7332, indicator.loc['2017-02-13 '].max() / 1000000)
+        self.assertEqual(8834, indicator.loc['2018-02-23 '].max() / 1000000)
+        self.assertEqual(9771, indicator.loc['2019-02-15'].max() / 1000000)
+        self.assertEqual(11160, indicator.loc['2020-02-13'].max() / 1000000)
+        self.assertEqual(29157, indicator.loc['2021-02-18'].max() / 1000000)
+
+    def test_cash_and_cash_equivalents_dal(self):
+        name_indicator = 'cash_and_cash_equivalents'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(2762, indicator.loc['2017-02-13 '].max() / 1000000)
+        self.assertEqual(1814, indicator.loc['2018-02-23 '].max() / 1000000)
+        self.assertEqual(1565, indicator.loc['2019-02-15'].max() / 1000000)
+        self.assertEqual(2882, indicator.loc['2020-02-13'].max() / 1000000)
+        self.assertEqual(8307, indicator.loc['2021-02-18'].max() / 1000000)
+
+    def test_cash_and_cash_equivalents_full_dal(self):
+        # https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&filenum=001-05424&type=10-K&dateb=&owner=include&count=40&search_text=
+        name_indicator = 'cash_and_cash_equivalents_full'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(2762 + 487, indicator.loc['2017-02-13 '].max() / 1000000)
+        self.assertEqual(2639, indicator.loc['2018-02-23 '].max() / 1000000)
+        self.assertEqual(1768, indicator.loc['2019-02-15'].max() / 1000000)
+        # self.assertEqual(2882, indicator.loc['2020-02-13'].max() / 1000000) see test_short_term_investments_special_case_dal
+        self.assertEqual(14096, indicator.loc['2021-02-18'].max() / 1000000)
+
+    def test_short_term_investments_dal(self):
+        name_indicator = 'short_term_investments'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(487, indicator.loc['2017-02-13 '].max() / 1000000)
+        self.assertEqual(825, indicator.loc['2018-02-23 '].max() / 1000000)
+        self.assertEqual(203, indicator.loc['2019-02-15'].max() / 1000000)
+        self.assertEqual(5789, indicator.loc['2021-02-18'].max() / 1000000)
+
+    # def test_short_term_investments_special_case_dal(self):
+    #     name_indicator = 'short_term_investments'
+    #     name_asset = 'NYSE:DAL'
+    #     wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+    #     indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+    #     print_normed(indicator, name_asset)
+    #     self.assertEqual(0, indicator.loc['2020-02-13'].max() / 1000000)
+
+    def test_net_debt_dal(self):
+        name_indicator = 'net_debt'
+        name_asset = 'NYSE:DAL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(7332 - 3249, indicator.loc['2017-02-13 '].max() / 1000000)
+        self.assertEqual(6195, indicator.loc['2018-02-23 '].max() / 1000000)
+        self.assertEqual(8003, indicator.loc['2019-02-15'].max() / 1000000)
+        # self.assertEqual(8278, indicator.loc['2020-02-13'].max() / 1000000)
+        self.assertEqual(27425 + 1732 - (8307 + 5789), indicator.loc['2021-02-18'].max() / 1000000)
+
+    def test_debt_apple(self):
+        name_indicator = 'debt'
+        name_asset = 'NASDAQ:AAPL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(87027, indicator.loc['2016-10-26'].max() / 1000000)
+        self.assertEqual(115680, indicator.loc['2017-11-03'].max() / 1000000)
+        self.assertEqual(114483, indicator.loc['2018-11-05'].max() / 1000000)
+        self.assertEqual(108047, indicator.loc['2019-10-31'].max() / 1000000)
+        self.assertEqual(122278, indicator.loc['2020-10-30'].max() / 1000000)  # + OperatingLease + FinanceLease
+
+
+    # def test_ev_apple(self):
+    #     name_indicator = 'ev'
+    #     name_asset = 'NASDAQ:AAPL'
+    #     wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+    #     indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+    #     print(indicator)
+    #
+    #     self.assertEqual(87027 - 67155, indicator.loc['2016-10-26'].max() / 1000000) #19877
+    #     self.assertEqual(41499, indicator.loc['2017-11-03'].max() / 1000000)
+    #     self.assertEqual(48182, indicator.loc['2018-11-05'].max() / 1000000)
+    #     # self.assertEqual(7490, indicator.loc['2019-10-31'].max() / 1000000)
+    #     self.assertEqual(21493, indicator.loc['2020-10-30'].max() / 1000000)
+
+    def test_cash_and_cash_equivalents_full_apple(self):
+        # https://www.sec.gov/cgi-bin/viewer?action=view&cik=320193&accession_number=0000320193-19-000119&xbrl_type=v#
+        name_indicator = 'cash_and_cash_equivalents_full'
+        name_asset = 'NASDAQ:AAPL'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(67155, indicator.loc['2016-10-26'].max() / 1000000)
+        self.assertEqual(74181, indicator.loc['2017-11-03'].max() / 1000000)
+        self.assertEqual(66301, indicator.loc['2018-11-05'].max() / 1000000)
+        # self.assertEqual(100557, indicator.loc['2019-10-31'].max() / 1000000)
+        self.assertEqual(90943, indicator.loc['2020-10-30'].max() / 1000000)  # + OperatingLease + FinanceLease
 
     def test_depreciation_and_amortization_ASRT(self):
         # https://www.sec.gov/cgi-bin/viewer?action=view&cik=1005201&accession_number=0001005201-19-000040&xbrl_type=v
@@ -534,6 +784,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(21789, indicator.loc['2020-01-31'].max() / 1000000)
         self.assertEqual(25251, indicator.loc['2021-02-03'].max() / 1000000)
         self.assertEqual(27397, indicator.loc['2021-04-30'].max() / 1000000)
+
 
     def test_ebitda_use_operating_income_amazon(self):
         name_indicator = 'ebitda_use_operating_income'
@@ -796,7 +1047,9 @@ class TestBaseFundamentalData(unittest.TestCase):
              'assets',
              'equity',
              'net_income',
+             'short_term_investments',
              'cash_and_cash_equivalents',
+             'cash_and_cash_equivalents_full',
              'operating_income',
              'income_before_taxes',
              'income_before_income_taxes',
@@ -810,6 +1063,8 @@ class TestBaseFundamentalData(unittest.TestCase):
              'losses_on_extinguishment_of_debt',
              'nonoperating_income_expense',
              'other_nonoperating_income_expense',
+             'debt',
+             'net_debt',
              'eps',
              'shares',
              'market_capitalization',
@@ -819,6 +1074,7 @@ class TestBaseFundamentalData(unittest.TestCase):
              'ev',
              'ev_divide_by_ebitda',
              'liabilities_divide_by_ebitda',
+             'net_debt_divide_by_ebitda',
              'p_divide_by_e',
              'p_divide_by_bv',
              'p_divide_by_s',
@@ -832,6 +1088,7 @@ class TestBaseFundamentalData(unittest.TestCase):
              'ev',
              'ev_divide_by_ebitda',
              'liabilities_divide_by_ebitda',
+             'net_debt_divide_by_ebitda',
              'p_divide_by_e',
              'p_divide_by_bv',
              'p_divide_by_s',

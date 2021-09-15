@@ -2,6 +2,7 @@ import datetime as dt
 import itertools
 
 import pandas as pd
+import numpy as np
 
 from qnt.data.common import *
 from qnt.data.secgov import load_facts
@@ -53,14 +54,14 @@ def get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_
     return result.copy()
 
 
-def get_annual(all_facts, market_data, fact_name, new_name, use_report_date):
+def get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy):
     key = global_cache.get_key_for(all_facts, market_data, fact_name, new_name, use_report_date)
     if global_cache.is_in_cache(key):
         return global_cache.get(key)
 
     facts = get_filtered(all_facts, [fact_name])
     indicator_df = get_simple_indicator(facts, market_data,
-                                        fact_name, use_report_date)
+                                        fact_name, use_report_date, build_instant_strategy)
     indicator_df[new_name] = indicator_df[fact_name]
     result = indicator_df.drop(columns=[fact_name])
     global_cache.add(key, result)
@@ -98,10 +99,10 @@ def get_filtered_by_period(all_facts, count_days_for_remove_old_period):
     return r
 
 
-def get_simple_indicator(all_facts, market_data, fact_name, use_report_date):
+def get_simple_indicator(all_facts, market_data, fact_name, use_report_date, build_instant_strategy):
     indicator = InstantIndicatorBuilder(fact_name,
                                         fact_name,
-                                        use_report_date)
+                                        use_report_date, build_instant_strategy)
     f = get_filtered(all_facts, fact_name)
     indicator_series = indicator.build_series_dict(f)
     df = get_df(indicator_series, market_data, fact_name)
@@ -126,110 +127,361 @@ def get_df(serias_facts, market_data, name):
     return r
 
 
-def build_losses_on_extinguishment_of_debt(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_losses_on_extinguishment_of_debt(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                           build_instant_strategy):
     fact_name = 'us-gaap:GainsLossesOnExtinguishmentOfDebt'
     new_name = 'losses_on_extinguishment_of_debt'
-    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
 
-def build_shares(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_shares(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     # https://www.sec.gov/structureddata/announcement/osd-announcement-110520-scaling-errors
+    # https://www.sec.gov/cgi-bin/viewer?action=view&cik=320193&accession_number=0001628280-16-020309&xbrl_type=v#
     fact_name = 'dei:EntityCommonStockSharesOutstanding'
     new_name = 'shares'
-    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
 
-def build_cash_and_cash_equivalent(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_cash_and_cash_equivalent(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     fact_name = 'us-gaap:CashAndCashEquivalentsAtCarryingValue'
     new_name = 'cash_and_cash_equivalent'
-    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
 
-def build_assets(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_assets(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     fact_name = 'us-gaap:Assets'
     new_name = 'assets'
-    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
 
-def build_equity(all_facts, market_data, use_report_date, build_ltm_strategy):
-    fact_name = 'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'
-    new_name = 'equity'
-    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+def build_equity(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    def get_merged(row):
+        e = row['equity_full']
+        if not math.isnan(e):
+            return e
+
+        return row['equity_simple']
+
+    def build_equity_full(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+        fact_name = 'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'
+        new_name = 'equity_full'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_equity_simple(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+        fact_name = 'us-gaap:StockholdersEquity'
+        new_name = 'equity_simple'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    equity = build_equity_full(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
+    equity['equity_simple'] = build_equity_simple(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                  build_instant_strategy)
+
+    equity['equity'] = equity.apply(get_merged, axis=1)
+
+    result = equity.drop(columns=['equity_simple', 'equity_full'])
+    return result
 
 
-def build_revenues(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_debt(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    def get_merged(row):
+        mix_current = row['long_term_debt_and_capital_lease_obligations_current']
+        mix_non_current = row['long_term_debt_and_capital_lease_obligations_non_current']
+
+        long_term_debt_current = row['long_term_debt_current']
+        long_term_debt_non_current = row['long_term_debt_non_current']
+
+        capital_lease_obligations_current = row['capital_lease_obligations_current']
+        capital_lease_obligations_non_current = row['capital_lease_obligations_non_current']
+
+        short_term_borrowings = row['short_term_borrowings']
+        commercial_paper = row['commercial_paper']
+
+        if not math.isnan(mix_current) and not math.isnan(mix_non_current):
+            return mix_current + mix_non_current + short_term_borrowings + commercial_paper
+
+        debt = long_term_debt_current + long_term_debt_non_current + capital_lease_obligations_current + capital_lease_obligations_non_current
+
+        finance_lease_liability_current = row['finance_lease_liability_current']
+        finance_lease_liability_non_current = row['finance_lease_liability_non_current']
+
+        operating_lease_liability_current = row['operating_lease_liability_current']
+        operating_lease_liability_non_current = row['operating_lease_liability_non_current']
+
+        return debt + finance_lease_liability_current + finance_lease_liability_non_current + \
+               operating_lease_liability_current + operating_lease_liability_non_current + \
+               short_term_borrowings + commercial_paper
+
+    def build_long_term_debt_and_capital_lease_obligations_current(all_facts, market_data, use_report_date,
+                                                                   build_ltm_strategy, build_instant_strategy):
+        fact_name = 'us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent'
+        new_name = 'long_term_debt_and_capital_lease_obligations_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_long_term_debt_and_capital_lease_obligations_non_current(all_facts, market_data, use_report_date,
+                                                                       build_ltm_strategy, build_instant_strategy):
+        fact_name = 'us-gaap:LongTermDebtAndCapitalLeaseObligations'
+        new_name = 'long_term_debt_and_capital_lease_obligations_non_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_short_term_borrowings(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                    build_instant_strategy):
+        fact_name = 'us-gaap:ShortTermBorrowings'
+        new_name = 'short_term_borrowings'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_finance_lease_liability_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                              build_instant_strategy):
+        fact_name = 'us-gaap:FinanceLeaseLiabilityCurrent'
+        new_name = 'finance_lease_liability_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_finance_lease_liability_non_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                  build_instant_strategy):
+        fact_name = 'us-gaap:FinanceLeaseLiabilityNoncurrent'
+        new_name = 'finance_lease_liability_non_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_long_term_debt_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                     build_instant_strategy):
+        fact_name = 'us-gaap:LongTermDebtCurrent'
+        new_name = 'long_term_debt_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_long_term_debt_non_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                         build_instant_strategy):
+        fact_name = 'us-gaap:LongTermDebtNoncurrent'
+        new_name = 'long_term_debt_non_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_capital_lease_obligations_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                build_instant_strategy):
+        fact_name = 'us-gaap:CapitalLeaseObligationsCurrent'
+        new_name = 'capital_lease_obligations_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_capital_lease_obligations_non_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                    build_instant_strategy):
+        fact_name = 'us-gaap:CapitalLeaseObligationsNoncurrent'
+        new_name = 'capital_lease_obligations_non_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_operating_lease_liability_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                build_instant_strategy):
+        fact_name = 'us-gaap:OperatingLeaseLiabilityCurrent'
+        new_name = 'operating_lease_liability_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_operating_lease_liability_non_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                    build_instant_strategy):
+        fact_name = 'us-gaap:OperatingLeaseLiabilityNoncurrent'
+        new_name = 'operating_lease_liability_non_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_commercial_paper(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+        fact_name = 'us-gaap:CommercialPaper'
+        new_name = 'commercial_paper'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    debt = build_long_term_debt_and_capital_lease_obligations_current(all_facts, market_data, use_report_date,
+                                                                      build_ltm_strategy, build_instant_strategy)
+    debt[
+        'long_term_debt_and_capital_lease_obligations_non_current'] = build_long_term_debt_and_capital_lease_obligations_non_current(
+        all_facts, market_data, use_report_date,
+        build_ltm_strategy, build_instant_strategy)
+
+    debt['long_term_debt_current'] = build_long_term_debt_current(all_facts, market_data, use_report_date,
+                                                                  build_ltm_strategy, build_instant_strategy).fillna(0)
+    debt['long_term_debt_non_current'] = build_long_term_debt_non_current(all_facts, market_data, use_report_date,
+                                                                          build_ltm_strategy,
+                                                                          build_instant_strategy).fillna(0)
+
+    debt['capital_lease_obligations_current'] = build_capital_lease_obligations_current(all_facts,
+                                                                                        market_data,
+                                                                                        use_report_date,
+                                                                                        build_ltm_strategy,
+                                                                                        build_instant_strategy).fillna(
+        0)
+
+    debt['capital_lease_obligations_non_current'] = build_capital_lease_obligations_non_current(all_facts,
+                                                                                                market_data,
+                                                                                                use_report_date,
+                                                                                                build_ltm_strategy,
+                                                                                                build_instant_strategy).fillna(
+        0)
+
+    debt['operating_lease_liability_current'] = build_operating_lease_liability_current(all_facts, market_data,
+                                                                                        use_report_date,
+                                                                                        build_ltm_strategy,
+                                                                                        build_instant_strategy).fillna(
+        0)
+    debt['operating_lease_liability_non_current'] = build_operating_lease_liability_non_current(all_facts, market_data,
+                                                                                                use_report_date,
+                                                                                                build_ltm_strategy,
+                                                                                                build_instant_strategy).fillna(
+        0)
+    debt['finance_lease_liability_current'] = build_finance_lease_liability_current(all_facts, market_data,
+                                                                                    use_report_date,
+                                                                                    build_ltm_strategy,
+                                                                                    build_instant_strategy).fillna(0)
+    debt['finance_lease_liability_non_current'] = build_finance_lease_liability_non_current(all_facts, market_data,
+                                                                                            use_report_date,
+                                                                                            build_ltm_strategy,
+                                                                                            build_instant_strategy).fillna(
+        0)
+    debt['short_term_borrowings'] = build_short_term_borrowings(all_facts, market_data, use_report_date,
+                                                                build_ltm_strategy, build_instant_strategy).fillna(0)
+
+    debt['commercial_paper'] = build_commercial_paper(all_facts, market_data, use_report_date,
+                                                      build_ltm_strategy, build_instant_strategy).fillna(0)
+
+    debt['debt'] = debt.apply(get_merged, axis=1)
+
+    result = debt.drop(columns=['long_term_debt_and_capital_lease_obligations_current',
+                                'long_term_debt_and_capital_lease_obligations_non_current',
+                                'long_term_debt_current',
+                                'long_term_debt_non_current',
+                                'capital_lease_obligations_current',
+                                'capital_lease_obligations_non_current',
+                                'operating_lease_liability_current',
+                                'operating_lease_liability_non_current',
+                                'finance_lease_liability_current',
+                                'finance_lease_liability_non_current',
+                                'short_term_borrowings',
+                                'commercial_paper'])
+    return result
+
+
+def build_net_debt(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    debt = build_debt(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
+    debt['cash'] = build_cash_and_cash_equivalents_full(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                        build_instant_strategy)
+    debt['net_debt'] = debt['debt'].fillna(0) - debt['cash'].fillna(0)
+
+    result = debt.drop(columns=['debt', 'cash'])
+    return result
+
+
+def build_revenues(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     fact_name = 'us-gaap:Revenues'
     new_name = 'total_revenue'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_income_before_income_taxes(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_income_before_income_taxes(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                     build_instant_strategy):
     fact_name = 'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest'
     new_name = 'income_before_income_taxes'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     fact_name = 'us-gaap:OperatingIncomeLoss'
     new_name = 'operating_income'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_income_interest(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_income_interest(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     fact_name = 'us-gaap:InvestmentIncomeInterest'
     new_name = 'income_interest'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_interest_expense(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_interest_expense(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     fact_name = 'us-gaap:InterestExpense'
     new_name = 'interest_expense'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_interest_expense_debt(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_interest_expense_debt(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     fact_name = 'us-gaap:InterestExpenseDebt'
     new_name = 'interest_expense_debt'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_interest_expense_capital_lease(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_interest_expense_capital_lease(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                         build_instant_strategy):
     fact_name = 'us-gaap:InterestExpenseLesseeAssetsUnderCapitalLease'
     new_name = 'interest_expense_capital_lease'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_interest_income_expense_net(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_interest_income_expense_net(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                      build_instant_strategy):
     fact_name = 'us-gaap:InterestIncomeExpenseNet'
     new_name = 'interest_income_expense_net'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_other_nonoperating_income_expense(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_other_nonoperating_income_expense(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                            build_instant_strategy):
     fact_name = 'us-gaap:OtherNonoperatingIncomeExpense'
     new_name = 'other_nonoperating_income_expense'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_nonoperating_income_expense(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_nonoperating_income_expense(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                      build_instant_strategy):
     fact_name = 'us-gaap:NonoperatingIncomeExpense'
     new_name = 'nonoperating_income_expense'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_cash_and_cash_equivalents(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_cash_and_cash_equivalents(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                    build_instant_strategy):
     fact_name = 'us-gaap:CashAndCashEquivalentsAtCarryingValue'
     new_name = 'cash_and_cash_equivalents'
-    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
 
-def build_net_income(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_short_term_investments(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    fact_name = 'us-gaap:ShortTermInvestments'
+    new_name = 'short_term_investments'
+    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+
+def build_cash_and_cash_equivalents_full(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                         build_instant_strategy):
+    def build_available_for_sale_securities_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                    build_instant_strategy):
+        fact_name = 'us-gaap:AvailableForSaleSecuritiesCurrent'
+        new_name = 'available_for_sale_securities_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    def build_marketable_securities_current(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                            build_instant_strategy):
+        fact_name = 'us-gaap:MarketableSecuritiesCurrent'
+        new_name = 'marketable_securities_current'
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+
+    cash = build_cash_and_cash_equivalents(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                           build_instant_strategy)
+    cash['short_term_investments'] = build_short_term_investments(all_facts, market_data, use_report_date,
+                                                                  build_ltm_strategy, build_instant_strategy)
+    cash['available_for_sale_securities_current'] = build_available_for_sale_securities_current(all_facts, market_data,
+                                                                                                use_report_date,
+                                                                                                build_ltm_strategy,
+                                                                                                build_instant_strategy)
+    cash['marketable_securities_current'] = build_marketable_securities_current(all_facts, market_data, use_report_date,
+                                                                                build_ltm_strategy,
+                                                                                build_instant_strategy)
+    cash['cash_and_cash_equivalents_full'] = cash['cash_and_cash_equivalents'].fillna(0) \
+                                             + cash['short_term_investments'].fillna(0) \
+                                             + cash['available_for_sale_securities_current'].fillna(0) \
+                                             + cash['marketable_securities_current'].fillna(0)
+    result = cash.drop(columns=['cash_and_cash_equivalents',
+                                'short_term_investments',
+                                'available_for_sale_securities_current',
+                                'marketable_securities_current'])
+    return result
+
+
+def build_net_income(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     fact_name = 'us-gaap:NetIncomeLoss'
     new_name = 'net_income'
     return get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy)
 
 
-def build_eps(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_eps(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     def get_merged(row):
         diluted = row['eps_diluted']
         if not math.isnan(diluted):
@@ -251,18 +503,19 @@ def build_eps(all_facts, market_data, use_report_date, build_ltm_strategy):
     return result
 
 
-def build_ev(all_facts, market_data, use_report_date, build_ltm_strategy):
-    cash = build_cash_and_cash_equivalents(all_facts, market_data, use_report_date, build_ltm_strategy)
-    cash['liabilities'] = build_liabilities(all_facts, market_data, use_report_date, build_ltm_strategy)
-    cash['market_capitalization'] = build_market_capitalization(all_facts, market_data, use_report_date,
-                                                                build_ltm_strategy)
-    cash['ev'] = cash['market_capitalization'] + cash['liabilities'] - cash['cash_and_cash_equivalents']
-    r = cash.drop(columns=['market_capitalization', 'liabilities', 'cash_and_cash_equivalents'])
+def build_ev(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    net_debt = build_net_debt(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
+    net_debt['market_capitalization'] = build_market_capitalization(all_facts, market_data, use_report_date,
+                                                                    build_ltm_strategy, build_instant_strategy)
+    net_debt['ev'] = net_debt['market_capitalization'].fillna(0) + net_debt['net_debt'].fillna(0)
+
+    r = net_debt.drop(columns=['market_capitalization', 'net_debt'])
+
     return r
 
 
-def build_market_capitalization(all_facts, market_data, use_report_date, build_ltm_strategy):
-    shares_df = build_shares(all_facts, market_data, use_report_date, build_ltm_strategy)
+def build_market_capitalization(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    shares_df = build_shares(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
     close_price = market_data.sel(field='close')
     close_price_df = close_price.to_pandas()
     shares_df['price'] = close_price_df[close_price_df.columns[0]]
@@ -272,30 +525,26 @@ def build_market_capitalization(all_facts, market_data, use_report_date, build_l
     return r
 
 
-def build_liabilities(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_liabilities(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     def get_liabilities():
         fact_name = 'us-gaap:Liabilities'
         new_name = 'liabilities'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
-
-    def get_stockholders_equity():
-        fact_name = 'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'
-        new_name = 'tockholders_equity'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
     def get_total():
         fact_name = 'us-gaap:LiabilitiesAndStockholdersEquity'
         new_name = 'total'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date)
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
     liabilities = get_liabilities()
     count_v = len(liabilities['liabilities'])
     count_null = liabilities['liabilities'].isnull().sum()
     is_all_null = count_v == count_null
     if is_all_null:
-        stockholders_equity = get_stockholders_equity()['tockholders_equity']
+        stockholders_equity = \
+            build_equity(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)['equity']
         total = get_total()['total']
-        liabilities['liabilities'] = total - stockholders_equity
+        liabilities['liabilities'] = total.fillna(0) - stockholders_equity.fillna(0)
 
     return liabilities
 
@@ -332,7 +581,7 @@ def build_liabilities(all_facts, market_data, use_report_date, build_ltm_strateg
     # return result
 
 
-def build_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
     def get_income_tax():
         fact_name = 'us-gaap:IncomeTaxExpenseBenefit'
         new_name = 'income_tax'
@@ -352,7 +601,8 @@ def build_income_before_taxes(all_facts, market_data, use_report_date, build_ltm
         return net_income + income_tax
 
     income_df = get_income_before_taxes_()
-    income_df['net_income'] = build_net_income(all_facts, market_data, use_report_date, build_ltm_strategy)
+    income_df['net_income'] = build_net_income(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                               build_instant_strategy)
     income_df['income_tax'] = get_income_tax()
     income_df['merged'] = income_df.apply(get_merged, axis=1)
     result = income_df.drop(columns=['income_tax', 'net_income', 'income_before_taxes'])
@@ -360,16 +610,19 @@ def build_income_before_taxes(all_facts, market_data, use_report_date, build_ltm
     return result
 
 
-def build_interest_net(all_facts, market_data, use_report_date, build_ltm_strategy):
-    operating_income_df = build_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy)
-    income_before_taxes_df = build_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy)
+def build_interest_net(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    operating_income_df = build_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                 build_instant_strategy)
+    income_before_taxes_df = build_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                       build_instant_strategy)
     r = operating_income_df.copy()
     r['interest_net'] = operating_income_df['operating_income'] - income_before_taxes_df['income_before_taxes']
     r = r.drop(columns=['operating_income'])
     return r
 
 
-def build_depreciation_and_amortization(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_depreciation_and_amortization(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                        build_instant_strategy):
     def get_ltm(fact_name, new_name):
         def get_ltm_amortization(fact_name):
             def is_correct_year(fact):
@@ -578,7 +831,8 @@ def build_depreciation_and_amortization(all_facts, market_data, use_report_date,
     return result1
 
 
-def build_ebitda_use_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_ebitda_use_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                         build_instant_strategy):
     def get_merged_interest(row):
         interest_expense = row['interest_expense']
         income_interest = row['income_interest']
@@ -596,29 +850,35 @@ def build_ebitda_use_income_before_taxes(all_facts, market_data, use_report_date
 
         return interest_expense
 
-    income_before_taxes_df = build_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy)
+    income_before_taxes_df = build_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                       build_instant_strategy)
     r = income_before_taxes_df.copy()
     r['depreciation_and_amortization'] = \
-        build_depreciation_and_amortization(all_facts, market_data, use_report_date, build_ltm_strategy)[
+        build_depreciation_and_amortization(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                            build_instant_strategy)[
             'depreciation_and_amortization'].fillna(0)
     r['interest_income_expense_net'] = \
-        build_interest_income_expense_net(all_facts, market_data, use_report_date, build_ltm_strategy)[
+        build_interest_income_expense_net(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                          build_instant_strategy)[
             'interest_income_expense_net'].fillna(0)
     r['losses_on_extinguishment_of_debt'] = \
-        build_losses_on_extinguishment_of_debt(all_facts, market_data, use_report_date, build_ltm_strategy)[
+        build_losses_on_extinguishment_of_debt(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                               build_instant_strategy)[
             'losses_on_extinguishment_of_debt'].fillna(0)
     r['debt'] = \
-        build_interest_expense_debt(all_facts, market_data, use_report_date, build_ltm_strategy)[
+        build_interest_expense_debt(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                    build_instant_strategy)[
             'interest_expense_debt'].fillna(0)
 
     r['interest_expense_capital_lease'] = \
-        build_interest_expense_capital_lease(all_facts, market_data, use_report_date, build_ltm_strategy)[
+        build_interest_expense_capital_lease(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                             build_instant_strategy)[
             'interest_expense_capital_lease'].fillna(0)
     r['income_interest'] = \
-        build_income_interest(all_facts, market_data, use_report_date, build_ltm_strategy)[
+        build_income_interest(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)[
             'income_interest'].fillna(0)
     r['interest_expense'] = \
-        build_interest_expense(all_facts, market_data, use_report_date, build_ltm_strategy)[
+        build_interest_expense(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)[
             'interest_expense'].fillna(0)
     r['interest'] = r.apply(get_merged_interest, axis=1)
 
@@ -639,7 +899,8 @@ def build_ebitda_use_income_before_taxes(all_facts, market_data, use_report_date
     return r
 
 
-def build_ebitda_use_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy):
+def build_ebitda_use_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                      build_instant_strategy):
     def get_merged_interest(row):
         interest_expense = row['interest_expense']
         income_interest = row['income_interest']
@@ -652,25 +913,31 @@ def build_ebitda_use_operating_income(all_facts, market_data, use_report_date, b
 
         return interest_expense
 
-    operating_income_df = build_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy)
+    operating_income_df = build_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                 build_instant_strategy)
     depreciation_and_amortization_df = build_depreciation_and_amortization(all_facts, market_data, use_report_date,
-                                                                           build_ltm_strategy)
-    income_interest_df = build_income_interest(all_facts, market_data, use_report_date, build_ltm_strategy)
+                                                                           build_ltm_strategy, build_instant_strategy)
+    income_interest_df = build_income_interest(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                               build_instant_strategy)
     onoperating_income_expense_df = build_nonoperating_income_expense(all_facts,
                                                                       market_data,
                                                                       use_report_date,
-                                                                      build_ltm_strategy)
+                                                                      build_ltm_strategy, build_instant_strategy)
     losses_on_extinguishment_of_debt_df = build_losses_on_extinguishment_of_debt(all_facts,
                                                                                  market_data,
                                                                                  use_report_date,
-                                                                                 build_ltm_strategy)
+                                                                                 build_ltm_strategy,
+                                                                                 build_instant_strategy)
 
     other_nonoperating_income_expense_df = build_other_nonoperating_income_expense(all_facts, market_data,
-                                                                                   use_report_date, build_ltm_strategy)
+                                                                                   use_report_date, build_ltm_strategy,
+                                                                                   build_instant_strategy)
     interest_income_expense_net_df = build_interest_income_expense_net(all_facts, market_data,
-                                                                       use_report_date, build_ltm_strategy)
+                                                                       use_report_date, build_ltm_strategy,
+                                                                       build_instant_strategy)
 
-    interest_expense_df = build_interest_expense(all_facts, market_data, use_report_date, build_ltm_strategy)
+    interest_expense_df = build_interest_expense(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                 build_instant_strategy)
     r = operating_income_df.copy()
     interest_expense_df['income_interest'] = income_interest_df['income_interest']
     interest_expense_df['other_nonoperating_income_expense_df'] = other_nonoperating_income_expense_df[
@@ -717,10 +984,11 @@ def build_ebitda_use_operating_income(all_facts, market_data, use_report_date, b
     return r
 
 
-def build_ebitda_simple(all_facts, market_data, use_report_date, build_ltm_strategy):
-    operating_income_df = build_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy)
+def build_ebitda_simple(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    operating_income_df = build_operating_income(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                 build_instant_strategy)
     depreciation_and_amortization_df = build_depreciation_and_amortization(all_facts, market_data, use_report_date,
-                                                                           build_ltm_strategy)
+                                                                           build_ltm_strategy, build_instant_strategy)
 
     operating_income = operating_income_df['operating_income'].fillna(0)
     depreciation_and_amortization = depreciation_and_amortization_df['depreciation_and_amortization'].fillna(0)
@@ -731,60 +999,87 @@ def build_ebitda_simple(all_facts, market_data, use_report_date, build_ltm_strat
     return r
 
 
-def build_ev_divide_by_ebitda(all_facts, market_data, use_report_date, build_ltm_strategy):
-    ebitda_simple = build_ebitda_simple(all_facts, market_data, use_report_date, build_ltm_strategy)
-    ev = build_ev(all_facts, market_data, use_report_date, build_ltm_strategy)
+def build_ev_divide_by_ebitda(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    ebitda_simple = build_ebitda_simple(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                        build_instant_strategy)
+    ev = build_ev(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
     ebitda_simple['ev_divide_by_ebitda'] = ev['ev'] / ebitda_simple['ebitda_simple']
     r = ebitda_simple.drop(columns=['ebitda_simple'])
+    r.replace([np.inf, -np.inf], np.nan, inplace=True)
     return r
 
 
-def build_liabilities_divide_by_ebitda(all_facts, market_data, use_report_date, build_ltm_strategy):
-    ebitda_simple = build_ebitda_simple(all_facts, market_data, use_report_date, build_ltm_strategy)
-    liabilities = build_liabilities(all_facts, market_data, use_report_date, build_ltm_strategy)
-    ebitda_simple['liabilities_divide_by_ebitda'] = liabilities['liabilities'] / ebitda_simple['ebitda_simple']
-    r = ebitda_simple.drop(columns=['ebitda_simple'])
+def build_liabilities_divide_by_ebitda(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                       build_instant_strategy):
+    ebitda_simple = build_ebitda_simple(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                        build_instant_strategy)
+    ebitda_simple['liabilities'] = build_liabilities(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                                     build_instant_strategy)
+    ebitda_simple['liabilities_divide_by_ebitda'] = ebitda_simple['liabilities'] / ebitda_simple['ebitda_simple']
+    r = ebitda_simple.drop(columns=['ebitda_simple', 'liabilities'])
+    r.replace([np.inf, -np.inf], np.nan, inplace=True)
     return r
 
 
-def build_p_divide_by_e(all_facts, market_data, use_report_date, build_ltm_strategy):
-    net_income = build_net_income(all_facts, market_data, use_report_date, build_ltm_strategy)
-    market_cap = build_market_capitalization(all_facts, market_data, use_report_date, build_ltm_strategy)
+def build_net_debt_divide_by_ebitda(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                    build_instant_strategy):
+    ebitda_simple = build_ebitda_simple(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                        build_instant_strategy)
+    ebitda_simple['net_debt'] = build_net_debt(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                               build_instant_strategy)
+    ebitda_simple['net_debt_divide_by_ebitda'] = ebitda_simple['net_debt'] / ebitda_simple['ebitda_simple']
+    r = ebitda_simple.drop(columns=['ebitda_simple', 'net_debt'])
+    r.replace([np.inf, -np.inf], np.nan, inplace=True)
+    return r
+
+
+def build_p_divide_by_e(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    net_income = build_net_income(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
+    market_cap = build_market_capitalization(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                             build_instant_strategy)
     net_income['p_divide_by_e'] = market_cap['market_capitalization'] / net_income['net_income']
     r = net_income.drop(columns=['net_income'])
+    r.replace([np.inf, -np.inf], np.nan, inplace=True)
     return r
 
 
-def build_p_divide_by_bv(all_facts, market_data, use_report_date, build_ltm_strategy):
-    equity = build_equity(all_facts, market_data, use_report_date, build_ltm_strategy)
-    market_cap = build_market_capitalization(all_facts, market_data, use_report_date, build_ltm_strategy)
+def build_p_divide_by_bv(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    equity = build_equity(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
+    market_cap = build_market_capitalization(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                             build_instant_strategy)
     equity['p_divide_by_bv'] = market_cap['market_capitalization'] / equity['equity']
     r = equity.drop(columns=['equity'])
+    r.replace([np.inf, -np.inf], np.nan, inplace=True)
     return r
 
 
-def build_p_divide_by_s(all_facts, market_data, use_report_date, build_ltm_strategy):
-    revenues = build_revenues(all_facts, market_data, use_report_date, build_ltm_strategy)
-    market_cap = build_market_capitalization(all_facts, market_data, use_report_date, build_ltm_strategy)
+def build_p_divide_by_s(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    revenues = build_revenues(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
+    market_cap = build_market_capitalization(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                             build_instant_strategy)
     revenues['p_divide_by_s'] = market_cap['market_capitalization'] / revenues['total_revenue']
     r = revenues.drop(columns=['total_revenue'])
+    r.replace([np.inf, -np.inf], np.nan, inplace=True)
     return r
 
 
-def build_ev_divide_by_s(all_facts, market_data, use_report_date, build_ltm_strategy):
-    ev = build_ev(all_facts, market_data, use_report_date, build_ltm_strategy)
-    revenues = build_revenues(all_facts, market_data, use_report_date, build_ltm_strategy)
+def build_ev_divide_by_s(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    ev = build_ev(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
+    revenues = build_revenues(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
     ev['ev_divide_by_s'] = ev['ev'] / revenues['total_revenue']
     r = ev.drop(columns=['ev'])
+    r.replace([np.inf, -np.inf], np.nan, inplace=True)
     return r
 
 
-def build_roe(all_facts, market_data, use_report_date, build_ltm_strategy):
-    net_income = build_net_income(all_facts, market_data, use_report_date, build_ltm_strategy)
-    net_income['equity'] = build_equity(all_facts, market_data, use_report_date, build_ltm_strategy)
+def build_roe(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
+    net_income = build_net_income(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)
+    net_income['equity'] = build_equity(all_facts, market_data, use_report_date, build_ltm_strategy,
+                                        build_instant_strategy)
 
     net_income['roe'] = net_income['net_income'] / net_income['equity']
     r = net_income.drop(columns=['net_income', 'equity'])
+    r.replace([np.inf, -np.inf], np.nan, inplace=True)
     return r
 
 
@@ -794,22 +1089,37 @@ global_indicators = {
 
     'liabilities': {'facts': ['us-gaap:Liabilities',
                               'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+                              'us-gaap:StockholdersEquity',
                               'us-gaap:LiabilitiesAndStockholdersEquity'],
                     'build': build_liabilities},
 
     'assets': {'facts': ['us-gaap:Assets'],
                'build': build_assets},
 
-    'equity': {'facts': ['us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
+    'equity': {'facts': ['us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+                         'us-gaap:StockholdersEquity'],
                'build': build_equity},
 
     'net_income': {'facts': ['us-gaap:NetIncomeLoss'],
                    'build': build_net_income},
 
+    'short_term_investments': {'facts': [
+        'us-gaap:ShortTermInvestments',
+    ],
+        'build': build_short_term_investments},
+
     'cash_and_cash_equivalents': {'facts': [
         'us-gaap:CashAndCashEquivalentsAtCarryingValue',
     ],
         'build': build_cash_and_cash_equivalents},
+
+    'cash_and_cash_equivalents_full': {'facts': [
+        'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+        'us-gaap:ShortTermInvestments',
+        'us-gaap:AvailableForSaleSecuritiesCurrent',
+        'us-gaap:MarketableSecuritiesCurrent',
+    ],
+        'build': build_cash_and_cash_equivalents_full},
 
     'operating_income': {'facts': [
         'us-gaap:OperatingIncomeLoss'],
@@ -881,6 +1191,47 @@ global_indicators = {
     ],
         'build': build_other_nonoperating_income_expense},
 
+    'debt': {'facts': [
+        'us-gaap:LongTermDebtAndCapitalLeaseObligations',
+        'us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent',
+        'us-gaap:LongTermDebtCurrent',
+        'us-gaap:LongTermDebtNoncurrent',
+        'us-gaap:CapitalLeaseObligationsCurrent',
+        'us-gaap:CapitalLeaseObligationsNoncurrent',
+        'us-gaap:FinanceLeaseLiabilityCurrent',
+        'us-gaap:FinanceLeaseLiabilityNoncurrent',
+        'us-gaap:OperatingLeaseLiabilityCurrent',
+        'us-gaap:OperatingLeaseLiabilityNoncurrent',
+        'us-gaap:ShortTermBorrowings',
+
+        'us-gaap:CommercialPaper',
+        'us-gaap:LongTermDebtCurrent',
+    ],
+        'build': build_debt},
+
+    'net_debt': {'facts': [
+        'us-gaap:LongTermDebtAndCapitalLeaseObligations',
+        'us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent',
+        'us-gaap:LongTermDebtCurrent',
+        'us-gaap:LongTermDebtNoncurrent',
+        'us-gaap:CapitalLeaseObligationsCurrent',
+        'us-gaap:CapitalLeaseObligationsNoncurrent',
+        'us-gaap:FinanceLeaseLiabilityCurrent',
+        'us-gaap:FinanceLeaseLiabilityNoncurrent',
+        'us-gaap:OperatingLeaseLiabilityCurrent',
+        'us-gaap:OperatingLeaseLiabilityNoncurrent',
+        'us-gaap:ShortTermBorrowings',
+
+        'us-gaap:CommercialPaper',
+        'us-gaap:LongTermDebtCurrent',
+
+        'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+        'us-gaap:ShortTermInvestments',
+        'us-gaap:AvailableForSaleSecuritiesCurrent',
+        'us-gaap:MarketableSecuritiesCurrent',
+    ],
+        'build': build_net_debt},
+
     'eps': {'facts': [
         'us-gaap:EarningsPerShareDiluted',
         'us-gaap:EarningsPerShare'
@@ -941,11 +1292,28 @@ global_indicators = {
         'build': build_ebitda_simple},
 
     'ev': {'facts': [
-        'us-gaap:Liabilities',
-        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
-        'us-gaap:LiabilitiesAndStockholdersEquity',
+
         'dei:EntityCommonStockSharesOutstanding',
+
+        'us-gaap:LongTermDebtAndCapitalLeaseObligations',
+        'us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent',
+        'us-gaap:LongTermDebtCurrent',
+        'us-gaap:LongTermDebtNoncurrent',
+        'us-gaap:CapitalLeaseObligationsCurrent',
+        'us-gaap:CapitalLeaseObligationsNoncurrent',
+        'us-gaap:FinanceLeaseLiabilityCurrent',
+        'us-gaap:FinanceLeaseLiabilityNoncurrent',
+        'us-gaap:OperatingLeaseLiabilityCurrent',
+        'us-gaap:OperatingLeaseLiabilityNoncurrent',
+        'us-gaap:ShortTermBorrowings',
+
+        'us-gaap:CommercialPaper',
+        'us-gaap:LongTermDebtCurrent',
+
         'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+        'us-gaap:ShortTermInvestments',
+        'us-gaap:AvailableForSaleSecuritiesCurrent',
+        'us-gaap:MarketableSecuritiesCurrent',
     ],
         'build': build_ev},
 
@@ -956,11 +1324,28 @@ global_indicators = {
         'us-gaap:DepreciationDepletionAndAmortization',
         'us-gaap:Depreciation',
         'us-gaap:AmortizationOfIntangibleAssets',
-        'us-gaap:Liabilities',
-        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
-        'us-gaap:LiabilitiesAndStockholdersEquity',
+
         'dei:EntityCommonStockSharesOutstanding',
+
+        'us-gaap:LongTermDebtAndCapitalLeaseObligations',
+        'us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent',
+        'us-gaap:LongTermDebtCurrent',
+        'us-gaap:LongTermDebtNoncurrent',
+        'us-gaap:CapitalLeaseObligationsCurrent',
+        'us-gaap:CapitalLeaseObligationsNoncurrent',
+        'us-gaap:FinanceLeaseLiabilityCurrent',
+        'us-gaap:FinanceLeaseLiabilityNoncurrent',
+        'us-gaap:OperatingLeaseLiabilityCurrent',
+        'us-gaap:OperatingLeaseLiabilityNoncurrent',
+        'us-gaap:ShortTermBorrowings',
+
+        'us-gaap:CommercialPaper',
+        'us-gaap:LongTermDebtCurrent',
+
         'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+        'us-gaap:ShortTermInvestments',
+        'us-gaap:AvailableForSaleSecuritiesCurrent',
+        'us-gaap:MarketableSecuritiesCurrent',
     ],
         'build': build_ev_divide_by_ebitda},
 
@@ -973,9 +1358,45 @@ global_indicators = {
         'us-gaap:AmortizationOfIntangibleAssets',
         'us-gaap:Liabilities',
         'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+        'us-gaap:StockholdersEquity',
         'us-gaap:LiabilitiesAndStockholdersEquity',
+
+        'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+        'us-gaap:ShortTermInvestments',
+        'us-gaap:AvailableForSaleSecuritiesCurrent',
+        'us-gaap:MarketableSecuritiesCurrent',
     ],
         'build': build_liabilities_divide_by_ebitda},
+
+    'net_debt_divide_by_ebitda': {'facts': [
+        'us-gaap:OperatingIncomeLoss',
+        'us-gaap:DepreciationAndAmortization',
+        'us-gaap:DepreciationAmortizationAndAccretionNet',
+        'us-gaap:DepreciationDepletionAndAmortization',
+        'us-gaap:Depreciation',
+        'us-gaap:AmortizationOfIntangibleAssets',
+
+        'us-gaap:LongTermDebtAndCapitalLeaseObligations',
+        'us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent',
+        'us-gaap:LongTermDebtCurrent',
+        'us-gaap:LongTermDebtNoncurrent',
+        'us-gaap:CapitalLeaseObligationsCurrent',
+        'us-gaap:CapitalLeaseObligationsNoncurrent',
+        'us-gaap:FinanceLeaseLiabilityCurrent',
+        'us-gaap:FinanceLeaseLiabilityNoncurrent',
+        'us-gaap:OperatingLeaseLiabilityCurrent',
+        'us-gaap:OperatingLeaseLiabilityNoncurrent',
+        'us-gaap:ShortTermBorrowings',
+
+        'us-gaap:CommercialPaper',
+        'us-gaap:LongTermDebtCurrent',
+
+        'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+        'us-gaap:ShortTermInvestments',
+        'us-gaap:AvailableForSaleSecuritiesCurrent',
+        'us-gaap:MarketableSecuritiesCurrent',
+    ],
+        'build': build_net_debt_divide_by_ebitda},
 
     'p_divide_by_e': {'facts': [
         'us-gaap:NetIncomeLoss',
@@ -985,7 +1406,8 @@ global_indicators = {
 
     'p_divide_by_bv': {'facts': [
         'dei:EntityCommonStockSharesOutstanding',
-        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'
+        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+        'us-gaap:StockholdersEquity'
     ],
         'build': build_p_divide_by_bv},
 
@@ -996,18 +1418,35 @@ global_indicators = {
         'build': build_p_divide_by_s},
 
     'ev_divide_by_s': {'facts': [
-        'us-gaap:Liabilities',
-        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
-        'us-gaap:LiabilitiesAndStockholdersEquity',
         'dei:EntityCommonStockSharesOutstanding',
+        'us-gaap:Revenues',
+
+        'us-gaap:LongTermDebtAndCapitalLeaseObligations',
+        'us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent',
+        'us-gaap:LongTermDebtCurrent',
+        'us-gaap:LongTermDebtNoncurrent',
+        'us-gaap:CapitalLeaseObligationsCurrent',
+        'us-gaap:CapitalLeaseObligationsNoncurrent',
+        'us-gaap:FinanceLeaseLiabilityCurrent',
+        'us-gaap:FinanceLeaseLiabilityNoncurrent',
+        'us-gaap:OperatingLeaseLiabilityCurrent',
+        'us-gaap:OperatingLeaseLiabilityNoncurrent',
+        'us-gaap:ShortTermBorrowings',
+
+        'us-gaap:CommercialPaper',
+        'us-gaap:LongTermDebtCurrent',
+
         'us-gaap:CashAndCashEquivalentsAtCarryingValue',
-        'us-gaap:Revenues'
+        'us-gaap:ShortTermInvestments',
+        'us-gaap:AvailableForSaleSecuritiesCurrent',
+        'us-gaap:MarketableSecuritiesCurrent',
     ],
         'build': build_ev_divide_by_s},
 
     'roe': {'facts': [
         'us-gaap:NetIncomeLoss',
         'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+        'us-gaap:StockholdersEquity'
     ],
         'build': build_roe},
 }
@@ -1022,6 +1461,7 @@ def get_complex_indicator_names():
             'ev',
             'ev_divide_by_ebitda',
             'liabilities_divide_by_ebitda',
+            'net_debt_divide_by_ebitda',
             'p_divide_by_e',
             'p_divide_by_bv',
             'p_divide_by_s',
@@ -1033,12 +1473,16 @@ def load_fundamental_indicators_for(
         stocks_market_data,
         indicator_names=None,
         build_ltm_strategy=None,
+        build_instant_strategy=None,
 ):
     if indicator_names is None:
         indicator_names = get_all_indicator_names()
 
     if build_ltm_strategy is None:
         build_ltm_strategy = PeriodIndicatorBuilder.build_ltm_with_remove_gaps
+
+    if build_instant_strategy is None:
+        build_instant_strategy = InstantIndicatorBuilder.build_series_fill_gaps
 
     global_cache.empty()
     fill_strategy = lambda xarr: xarr.ffill('time')
@@ -1090,14 +1534,16 @@ def load_fundamental_indicators_for(
                                                                                             market_data.sel(
                                                                                                 asset=[asset_name]),
                                                                                             use_report_date,
-                                                                                            build_ltm_strategy)
+                                                                                            build_ltm_strategy,
+                                                                                            build_instant_strategy)
                     else:
                         all_indicators_for_asset_df[indicator] = global_indicators[indicator]['build'](cik_reports[1],
                                                                                                        market_data.sel(
                                                                                                            asset=[
                                                                                                                asset_name]),
                                                                                                        use_report_date,
-                                                                                                       build_ltm_strategy)
+                                                                                                       build_ltm_strategy,
+                                                                                                       build_instant_strategy)
             if all_indicators_for_asset_df is None:
                 continue
 

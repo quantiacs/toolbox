@@ -104,14 +104,72 @@ class IndicatorBuilder:
 
 class InstantIndicatorBuilder(IndicatorBuilder):
 
-    def __init__(self, alias, facts, use_report_date):
+    def __init__(self, alias, facts, use_report_date, build_strategy=None):
         super().__init__(alias, facts, use_report_date)
         self.group_key = (lambda f: f['report_date']) if self.use_report_date else (lambda f: f['period'])
 
+        if build_strategy is None:
+            self.build = InstantIndicatorBuilder.build_series_fill_gaps
+        else:
+            self.build = build_strategy
+
     def build_series_dict(self, fact_data):
+        if len(fact_data) == 0:
+            return []
+
         fact_data = sorted(fact_data, key=self.sort_key, reverse=True)
         groups = itertools.groupby(fact_data, self.group_key)
-        return dict((g[0], next(g[1])['value']) for g in groups)
+
+        series_ = list((next(g[1])['value'], dt.datetime.strptime(g[0], '%Y-%m-%d')) for g in groups)
+        restore = self.build(series_)
+        return dict((g[1].strftime('%Y-%m-%d'), g[0]) for g in restore)
+
+    @staticmethod
+    def build_series_fill_gaps(fact_series_dict):
+
+        border_max_gap_days = 380
+
+        def fill_gaps(series_dict):
+            if len(series_dict) == 0:
+                return series_dict
+
+            r = []
+            sort_f = lambda f: (f[1])
+            sort_series = sorted(series_dict, key=sort_f)
+            previous_fact = None
+            for fact in sort_series:
+                if previous_fact is None:
+                    previous_fact = fact
+                    r.append(fact)
+                    continue
+
+                previous_date = previous_fact[1]
+                current_date = fact[1]
+
+                dist = (current_date - previous_date).days
+
+                if dist >= border_max_gap_days:
+                    restore_null_value = previous_date + dt.timedelta(days=border_max_gap_days)
+                    r.append([0, restore_null_value])
+
+                r.append(fact)
+                previous_fact = fact
+
+            today = dt.datetime.today()
+            last_fact_date = previous_fact[1]
+            dist_today = (today - last_fact_date).days
+
+            if dist_today >= border_max_gap_days:
+                restore_null_value = last_fact_date + dt.timedelta(days=border_max_gap_days)
+                r.append([0, restore_null_value])
+
+            return r
+
+        r = fill_gaps(fact_series_dict)
+
+        sort_merged = sorted(r, key=lambda f: (f[1]))
+
+        return sort_merged
 
 
 class SimplePeriodIndicatorBuilder(IndicatorBuilder):
