@@ -349,6 +349,15 @@ class TestBaseFundamentalData(unittest.TestCase):
         # <us-gaap:OperatingLeaseLiabilityCurrent contextRef="FI2020Q4" decimals="-6" id="d14043724e1814-wk-Fact-792744BB9A725D81B56097016860A62A" unitRef="usd">1793000000</us-gaap:OperatingLeaseLiabilityCurrent>
         self.assertEqual(72433, indicator.loc['2020-03-20 '].max() / 1000000)
 
+    def test_ev_tesla(self):
+        name_indicator = 'ev'
+        name_asset = 'NASDAQ:TSLA'
+        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+        print_normed(indicator, name_asset)
+
+        self.assertEqual(11404.127117677155, indicator.loc['2017-03-01 '].max() / 1000000)  # did not check
+
     def test_net_debt_divide_by_ebitda_wmt(self):
         name_indicator = 'net_debt_divide_by_ebitda'
         name_asset = 'NYSE:WMT'
@@ -613,6 +622,14 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(108047, indicator.loc['2019-10-31'].max() / 1000000)
         self.assertEqual(122278, indicator.loc['2020-10-30'].max() / 1000000)  # + OperatingLease + FinanceLease
 
+    # def test_debt_apple(self):
+    #     name_indicator = 'debt'
+    #     name_asset = 'NASDAQ:HSIC'
+    #     wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+    #     indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
+    #     print_normed(indicator, name_asset)
+    #
+    #     self.assertEqual(87027, indicator.loc['2020-02-20'].max() / 1000000)
 
     # def test_ev_apple(self):
     #     name_indicator = 'ev'
@@ -784,7 +801,6 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(21789, indicator.loc['2020-01-31'].max() / 1000000)
         self.assertEqual(25251, indicator.loc['2021-02-03'].max() / 1000000)
         self.assertEqual(27397, indicator.loc['2021-04-30'].max() / 1000000)
-
 
     def test_ebitda_use_operating_income_amazon(self):
         name_indicator = 'ebitda_use_operating_income'
@@ -1036,6 +1052,21 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(27.045579637679136, indicator.loc['2018-02-02'].max())
         self.assertEqual(22.51529482377764, indicator.loc['2020-01-31'].max())
 
+    # def test_ev_tesla_last_day(self):
+    #     import qnt.data    as qndata
+    #     import qnt.data.secgov_indicators_new
+    #     import qnt.graph   as qngraph
+    #
+    #     market_data = qndata.stocks_load_data(tail=2 * 365, dims=("time", "field", "asset"), assets=['NYSE:GM'])
+    #     indicators = qnt.data.load_fundamental_indicators_for(market_data, ['net_debt'])
+    #
+    #     TSLA = indicators.sel(asset='NYSE:GM')
+    #     print(TSLA)
+    #
+    #     self.assertEqual(14.456321204295989, indicators.loc['2017-02-10'].max())
+    #     self.assertEqual(27.045579637679136, indicators.loc['2018-02-02'].max())
+    #     self.assertEqual(22.51529482377764, indicators.loc['2020-01-31'].max())
+
     def test_all_indicators_list(self):
         import qnt.data    as qndata
         import qnt.data.secgov_indicators_new
@@ -1141,7 +1172,7 @@ def get_data_wmt():
         return filler
 
     import qnt.data    as qndata
-    assets = qndata.load_assets(min_date="2010-01-01", max_date="2021-06-25")
+    assets = qndata.load_assets(min_date="2000-01-01", max_date="2021-06-25")
 
     WMT = {}
     DOCU = {}
@@ -1213,7 +1244,14 @@ def get_data_new_for(asset_names, indicators_names):
     import qnt.data    as qndata
     import qnt.data.secgov_indicators_new
 
-    market_data = qndata.load_data(min_date="2010-01-01", max_date="2021-07-28",
+    import pickle
+
+    # with open('stocks_all.pkl', 'rb') as handle:
+    #     market_data = pickle.load(handle)
+    #
+    # market_data = market_data.sel(asset=asset_names)
+
+    market_data = qndata.load_data(min_date="2010-01-01", max_date="2021-09-28",
                                    dims=("time", "field", "asset"),
                                    assets=asset_names,
                                    forward_order=True)

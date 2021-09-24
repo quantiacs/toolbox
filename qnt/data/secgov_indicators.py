@@ -101,6 +101,45 @@ class IndicatorBuilder:
     def build_series_dict(self, fact_data):
         pass
 
+    @staticmethod
+    def get_restored_by_segment(facts_in_report):
+        def get_accumulated_by_segment(facts_in_report):
+            def get_key(fact):
+                period = fact['period']
+                period_str = period
+                if type(period) == list:
+                    r = ''
+                    for p in period:
+                        r += " " + p
+                    period_str = r
+                key = period_str + " " + fact['report_type'] + " " + str(fact['period_length'])
+                return key
+
+            r = {}
+            for fact in facts_in_report:
+                if fact['segment'] is not None:
+                    key = get_key(fact)
+                    if key in r:
+                        r[key]['value'] += fact['value']
+                    else:
+                        r[key] = fact
+            accumulated = []
+            for key in r:
+                accumulated.append(r[key])
+            return accumulated
+
+        def get_no_segment_fact(facts_in_report):
+            r = []
+            for fact in facts_in_report:
+                if 'segment' not in fact or fact['segment'] is None:
+                    r.append(fact)
+            return r
+
+        no_segment_fact = get_no_segment_fact(facts_in_report)
+        if len(no_segment_fact) != 0:
+            return no_segment_fact
+        return get_accumulated_by_segment(facts_in_report)
+
 
 class InstantIndicatorBuilder(IndicatorBuilder):
 
@@ -120,7 +159,15 @@ class InstantIndicatorBuilder(IndicatorBuilder):
         fact_data = sorted(fact_data, key=self.sort_key, reverse=True)
         groups = itertools.groupby(fact_data, self.group_key)
 
-        series_ = list((next(g[1])['value'], dt.datetime.strptime(g[0], '%Y-%m-%d')) for g in groups)
+        series_ = []
+
+        for g in groups:
+            facts_in_report = list(g[1])
+            filtered_facts_in_report = IndicatorBuilder.get_restored_by_segment(facts_in_report)
+            report_date = dt.datetime.strptime(g[0], '%Y-%m-%d')
+            value = filtered_facts_in_report[0]['value']
+            series_.append((value, report_date))
+
         restore = self.build(series_)
         return dict((g[1].strftime('%Y-%m-%d'), g[0]) for g in restore)
 
@@ -262,9 +309,11 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
             k_indexis = []
 
             facts_in_report = list(g[1])
+            filtered_facts_in_report = IndicatorBuilder.get_restored_by_segment(facts_in_report)
+
             report_date = g[0]
 
-            for i, f in enumerate(facts_in_report):
+            for i, f in enumerate(filtered_facts_in_report):
                 if f['value'] is not None:
                     all_facts_for_recovered_q_values.append([f['period'], f['value']])
 
@@ -278,12 +327,12 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
             is_Q_report_exist = (len(q_indexis) > 0)
             is_K_report_exist = (len(k_indexis) > 0)
             if is_Q_report_exist and is_K_report_exist == False:
-                q_value_date_all.append([facts_in_report[q_indexis[-1]]['value'], report_date])
+                q_value_date_all.append([filtered_facts_in_report[q_indexis[-1]]['value'], report_date])
                 continue
 
             if is_K_report_exist and is_Q_report_exist == False:
-                first_k_date = dt.datetime.strptime(facts_in_report[k_indexis[-1]]['period'][0], '%Y-%m-%d')
-                k_value = facts_in_report[k_indexis[-1]]['value']
+                first_k_date = dt.datetime.strptime(filtered_facts_in_report[k_indexis[-1]]['period'][0], '%Y-%m-%d')
+                k_value = filtered_facts_in_report[k_indexis[-1]]['value']
 
                 if k_value is None:
                     q_value_date_all.append([np.nan, report_date])
@@ -301,17 +350,17 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
                     recovered_q_value = k_value / 4
                 else:
                     previous_3q = previous_3_quarters(all_facts_for_recovered_q_values, first_k_date,
-                                                      facts_in_report[k_indexis[-1]]['value'])
+                                                      filtered_facts_in_report[k_indexis[-1]]['value'])
                     recovered_q_value = k_value - previous_3q
 
                 q_value_date_all.append([recovered_q_value, report_date])
                 continue
 
             if is_K_report_exist and is_Q_report_exist:
-                q_fact = facts_in_report[q_indexis[-1]]
+                q_fact = filtered_facts_in_report[q_indexis[-1]]
                 last_q_date = dt.datetime.strptime(q_fact['period'][1], '%Y-%m-%d')
 
-                k_fact = facts_in_report[k_indexis[-1]]
+                k_fact = filtered_facts_in_report[k_indexis[-1]]
                 last_k_date = dt.datetime.strptime(k_fact['period'][1], '%Y-%m-%d')
                 first_k_date = dt.datetime.strptime(k_fact['period'][0], '%Y-%m-%d')
 
@@ -323,7 +372,7 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
                         recovered_q_value = np.nan
                     else:
                         previous_3q = previous_3_quarters(all_facts_for_recovered_q_values, first_k_date,
-                                                          facts_in_report[k_indexis[-1]]['value'])
+                                                          filtered_facts_in_report[k_indexis[-1]]['value'])
                         recovered_q_value = k_value - previous_3q
                     q_value_date_all.append([recovered_q_value, report_date])
                 continue

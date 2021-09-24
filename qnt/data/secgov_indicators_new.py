@@ -60,7 +60,8 @@ def get_annual(all_facts, market_data, fact_name, new_name, use_report_date, bui
         return global_cache.get(key)
 
     facts = get_filtered(all_facts, [fact_name])
-    indicator_df = get_simple_indicator(facts, market_data,
+    facts_no_segment = [f for f in facts if 'segment' not in f or f['segment'] is None]
+    indicator_df = get_simple_indicator(facts_no_segment, market_data,
                                         fact_name, use_report_date, build_instant_strategy)
     indicator_df[new_name] = indicator_df[fact_name]
     result = indicator_df.drop(columns=[fact_name])
@@ -197,7 +198,8 @@ def build_debt(all_facts, market_data, use_report_date, build_ltm_strategy, buil
         commercial_paper = row['commercial_paper']
 
         if not math.isnan(mix_current) and not math.isnan(mix_non_current):
-            return mix_current + mix_non_current + short_term_borrowings + commercial_paper
+            if mix_current + mix_non_current != 0:
+                return mix_current + mix_non_current + short_term_borrowings + commercial_paper
 
         debt = long_term_debt_current + long_term_debt_non_current + capital_lease_obligations_current + capital_lease_obligations_non_current
 
@@ -536,17 +538,24 @@ def build_liabilities(all_facts, market_data, use_report_date, build_ltm_strateg
         new_name = 'total'
         return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
-    liabilities = get_liabilities()
-    count_v = len(liabilities['liabilities'])
-    count_null = liabilities['liabilities'].isnull().sum()
-    is_all_null = count_v == count_null
-    if is_all_null:
-        stockholders_equity = \
-            build_equity(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)['equity']
-        total = get_total()['total']
-        liabilities['liabilities'] = total.fillna(0) - stockholders_equity.fillna(0)
+    def get_merged(row):
+        liabilities = row['liabilities']
+        if not math.isnan(liabilities):
+            return liabilities
+        equity = row['equity']
+        total = row['total']
+        return total - equity
 
-    return liabilities
+    liabilities = get_liabilities()
+    liabilities['equity'] = \
+        build_equity(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy)[
+            'equity'].fillna(
+            0)
+    liabilities['total'] = get_total()['total'].fillna(0)
+
+    liabilities['liabilities'] = liabilities.apply(get_merged, axis=1)
+    result = liabilities.drop(columns=['equity', 'total'])
+    return result
 
     # alternative way
 
@@ -624,6 +633,44 @@ def build_interest_net(all_facts, market_data, use_report_date, build_ltm_strate
 def build_depreciation_and_amortization(all_facts, market_data, use_report_date, build_ltm_strategy,
                                         build_instant_strategy):
     def get_ltm(fact_name, new_name):
+        def get_accumulated_by_segment(facts_in_report):
+            def get_key(fact):
+                period = fact['period']
+                period_str = period
+                if type(period) == list:
+                    r = ''
+                    for p in period:
+                        r += " " + p
+                    period_str = r
+                key = period_str + " " + fact['report_type'] + " " + str(fact['period_length'])
+                return key
+
+            r = {}
+            for fact in facts_in_report:
+                if fact['segment'] is not None:
+                    key = get_key(fact)
+                    if key in r:
+                        r[key]['value'] += fact['value']
+                    else:
+                        r[key] = fact
+            accumulated = []
+            for key in r:
+                accumulated.append(r[key])
+            return accumulated
+
+        def get_no_segment_fact(facts_in_report):
+            r = []
+            for fact in facts_in_report:
+                if 'segment' not in fact or fact['segment'] is None:
+                    r.append(fact)
+            return r
+
+        def get_filtered_facts(facts_in_report):
+            no_segment_fact = get_no_segment_fact(facts_in_report)
+            if len(no_segment_fact) != 0:
+                return no_segment_fact
+            return get_accumulated_by_segment(facts_in_report)
+
         def get_ltm_amortization(fact_name):
             def is_correct_year(fact):
                 is_correct = fact['value'] is not None and fact['period_length'] is not None
@@ -679,9 +726,11 @@ def build_depreciation_and_amortization(all_facts, market_data, use_report_date,
             for g in groups:
 
                 facts_in_report = list(g[1])
+                filtered_facts_in_report = get_filtered_facts(facts_in_report)
+
                 report_date = dt.datetime.strptime(g[0], '%Y-%m-%d').date().isoformat()
                 sort_key = lambda f: (f['period'])
-                facts_in_report_sorted = sorted(facts_in_report, key=sort_key)
+                facts_in_report_sorted = sorted(filtered_facts_in_report, key=sort_key)
 
                 current = facts_in_report_sorted[-1]
 
@@ -1225,6 +1274,8 @@ global_indicators = {
         'us-gaap:CommercialPaper',
         'us-gaap:LongTermDebtCurrent',
 
+        'us-gaap:DebtCurrent',
+
         'us-gaap:CashAndCashEquivalentsAtCarryingValue',
         'us-gaap:ShortTermInvestments',
         'us-gaap:AvailableForSaleSecuritiesCurrent',
@@ -1498,12 +1549,12 @@ def load_fundamental_indicators_for(
 
         assets = get_assets(market_data.time)
 
-        assets_for_load = []
+        assets_for_load = set()
         for asset in assets:
             if asset['id'] in asset_names and asset.get('cik') is not None:
-                assets_for_load.append(asset['cik'])
+                assets_for_load.add(asset['cik'])
 
-        return assets_for_load
+        return list(assets_for_load)
 
     def get_us_gaap_facts_for_load(indicators):
         facts = []
@@ -1515,9 +1566,9 @@ def load_fundamental_indicators_for(
         return facts_unique
 
     def load_all_facts(ciks, us_gaap_facts, min_date, max_date):
-        for cik_reports in load_facts(ciks, us_gaap_facts, min_date=min_date, max_date=max_date, skip_segment=True,
+        for cik_reports in load_facts(ciks, us_gaap_facts, min_date=min_date, max_date=max_date, skip_segment=False,
                                       columns=['cik', 'report_id', 'report_type', 'report_date', 'fact_name', 'period',
-                                               'period_length'],
+                                               'period_length', 'segment'],
                                       group_by_cik=True):
             yield cik_reports
 
