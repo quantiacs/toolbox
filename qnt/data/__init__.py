@@ -13,9 +13,9 @@ from .blsgov import load_series_data as blsgov_load_series_data
 from .secgov import load_forms as secgov_load_forms
 from .secgov import load_facts as secgov_load_facts
 from .secgov_indicators import load_indicators as secgov_load_indicators
-from .secgov_indicators_new import load_fundamental_indicators_for
-from .secgov_indicators_new import get_all_indicator_names
-from .secgov_indicators_new import get_complex_indicator_names
+from .secgov_fundamental import load_indicators_for as secgov_load_indicators_for
+from .secgov_fundamental import get_all_indicator_names as secgov_get_all_indicator_names
+from .secgov_fundamental import get_complex_indicator_names as secgov_get_complex_indicator_names
 
 from .crypto import load_data as crypto_load_data
 from .cryptofutures import load_data as cryptofutures_load_data

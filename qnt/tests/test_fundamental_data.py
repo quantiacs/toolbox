@@ -673,7 +673,7 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     # def test_perform_wmt(self):
     #     import qnt.data    as qndata
-    #     import qnt.data.secgov_indicators_new
+    #     import qnt.data.secgov_fundamental
     #     name_indicator = 'total_revenue'
     #     name_asset = 'NYSE:WMT'
     #     data = qndata.stocks_load_data(tail=5 * 365, dims=("time", "field", "asset"))
@@ -681,7 +681,7 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     name_assets = data.asset.to_pandas().to_list()
     #
     #     import qnt.data    as qndata
-    #     import qnt.data.secgov_indicators_new
+    #     import qnt.data.secgov_fundamental
     #
     #     market_data = qndata.load_data(min_date="2010-01-01", max_date="2021-07-28",
     #                                    dims=("time", "field", "asset"),
@@ -1054,7 +1054,7 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     # def test_ev_tesla_last_day(self):
     #     import qnt.data    as qndata
-    #     import qnt.data.secgov_indicators_new
+    #     import qnt.data.secgov_fundamental
     #     import qnt.graph   as qngraph
     #
     #     market_data = qndata.stocks_load_data(tail=2 * 365, dims=("time", "field", "asset"), assets=['NYSE:GM'])
@@ -1068,9 +1068,8 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     self.assertEqual(22.51529482377764, indicators.loc['2020-01-31'].max())
 
     def test_all_indicators_list(self):
-        import qnt.data    as qndata
-        import qnt.data.secgov_indicators_new
-        all_indicators = qnt.data.get_all_indicator_names()
+        import qnt.data.secgov_fundamental as fundamental
+        all_indicators = fundamental.get_all_indicator_names()
 
         self.assertEqual(
             ['total_revenue',
@@ -1125,7 +1124,7 @@ class TestBaseFundamentalData(unittest.TestCase):
              'p_divide_by_s',
              'ev_divide_by_s',
              'roe']
-            , qnt.data.get_complex_indicator_names())
+            , fundamental.get_complex_indicator_names())
 
     # def test_ebitda_use_income_before_taxes(self):
     #     name_indicator = 'ebitda_use_income_before_taxes'
@@ -1242,7 +1241,7 @@ def test_all():
 
 def get_data_new_for(asset_names, indicators_names):
     import qnt.data    as qndata
-    import qnt.data.secgov_indicators_new
+    import qnt.data.secgov_fundamental as fundamental
 
     import pickle
 
@@ -1256,7 +1255,7 @@ def get_data_new_for(asset_names, indicators_names):
                                    assets=asset_names,
                                    forward_order=True)
 
-    indicators = qnt.data.load_fundamental_indicators_for(market_data, indicators_names)
+    indicators = fundamental.load_indicators_for(market_data, indicators_names)
 
     return indicators
 

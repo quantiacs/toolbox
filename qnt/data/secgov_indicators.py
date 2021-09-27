@@ -119,8 +119,11 @@ class IndicatorBuilder:
             for fact in facts_in_report:
                 if fact['segment'] is not None:
                     key = get_key(fact)
-                    if key in r:
-                        r[key]['value'] += fact['value']
+                    if key in r and fact['value'] is not None:
+                        if r[key]['value'] is not None:
+                            r[key]['value'] += fact['value']
+                        else:
+                            r[key]['value'] = fact['value']
                     else:
                         r[key] = fact
             accumulated = []

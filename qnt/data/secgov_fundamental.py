@@ -649,8 +649,11 @@ def build_depreciation_and_amortization(all_facts, market_data, use_report_date,
             for fact in facts_in_report:
                 if fact['segment'] is not None:
                     key = get_key(fact)
-                    if key in r:
-                        r[key]['value'] += fact['value']
+                    if key in r and fact['value'] is not None:
+                        if r[key]['value'] is not None:
+                            r[key]['value'] += fact['value']
+                        else:
+                            r[key]['value'] = fact['value']
                     else:
                         r[key] = fact
             accumulated = []
@@ -1520,7 +1523,7 @@ def get_complex_indicator_names():
             'roe']
 
 
-def load_fundamental_indicators_for(
+def load_indicators_for(
         stocks_market_data,
         indicator_names=None,
         build_ltm_strategy=None,
