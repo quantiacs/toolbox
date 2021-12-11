@@ -55,7 +55,8 @@ def load_data_by_type(data_type, **kwargs):
         return crypto_load_data(**kwargs)
     elif data_type == 'crypto_futures' or data_type == 'cryptofutures':
         return cryptofutures_load_data(**kwargs)
-    elif data_type == 'crypto_daily' or data_type == 'cryptodaily' or data_type == 'crypto_daily_long':
+    elif data_type == 'crypto_daily' or data_type == 'cryptodaily'\
+            or data_type == 'crypto_daily_long' or data_type == 'crypto_daily_long_short':
         return cryptodaily_load_data(**kwargs)
     else:
         raise Exception("Wrong data_type.")

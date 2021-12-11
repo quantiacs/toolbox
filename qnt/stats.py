@@ -567,7 +567,7 @@ def calc_avg_points_per_year(data: xr.DataArray):
         if data.name == 'crypto':
             return round(365.25*24)
         if data.name in [ 'cryptofutures', 'crypto_futures', 'crypto_daily', 'cryptodaily',
-                          'crypto_daily_long']:
+                          'crypto_daily_long', 'crypto_daily_long_short']:
             return 365
         if data.name in ['stocks', 'stocks_long', 'futures']:
             return 251
@@ -592,7 +592,7 @@ def get_default_is_period_for_type(name):
         return int(get_env('IS_FUTURES', '3528', True))
     if name == 'cryptofutures' or name == 'crypto_futures':
         return int(get_env('IS_CRYPTOFUTURES', '1764', True))
-    if name == 'cryptodaily' or name == 'crypto_daily' or name == 'crypto_daily_long':
+    if name == 'cryptodaily' or name == 'crypto_daily' or name == 'crypto_daily_long' or name == 'crypto_daily_long_short':
         return int(get_env('IS_CRYPTOFUTURES', '1764', True))
     if name == 'crypto':
         return int(get_env('IS_CRYPTO', '60000', True))
@@ -606,7 +606,7 @@ def get_default_is_start_date_for_type(name):
         return get_env('SD_FUTURES', '2006-01-01', True)
     if name == 'cryptofutures' or name == 'crypto_futures':
         return get_env('SD_CRYPTOFUTURES', '2014-01-01', True)
-    if name == 'cryptodaily' or name == 'crypto_daily' or name == 'crypto_daily_long':
+    if name == 'cryptodaily' or name == 'crypto_daily' or name == 'crypto_daily_long' or name == 'crypto_daily_long_short':
         return get_env('SD_CRYPTODAILY', '2014-01-01', True)
     if name == 'crypto':
         return get_env('SD_CRYPTO', '2014-01-01', True)
@@ -620,7 +620,7 @@ def get_default_slippage(data):
         return float(get_env('SL_FUTURES', '0.04', True))
     if data.name == 'cryptofutures' or data.name == 'crypto_futures':
         return float(get_env('SL_CRYPTOFUTURES', '0.04', True))
-    if data.name == 'cryptodaily' or data.name == 'crypto_daily' or data.name == 'crypto_daily_long':
+    if data.name == 'cryptodaily' or data.name == 'crypto_daily' or data.name == 'crypto_daily_long' or data.name == 'crypto_daily_long_short':
         return float(get_env('SL_CRYPTODAILY', '0.04', True))
     if data.name == 'crypto':
         return float(get_env('SL_CRYPTO', '0.05', True))
