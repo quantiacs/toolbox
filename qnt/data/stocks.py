@@ -8,7 +8,8 @@ from qnt.data.common import *
 def load_list(
         min_date: tp.Union[str, datetime.date, None] = None,
         max_date: tp.Union[str, datetime.date, None] = None,
-        tail: tp.Union[datetime.timedelta, float, int] = 4 * 365
+        tail: tp.Union[datetime.timedelta, float, int] = 4 * 365,
+        stocks_type:tp.Union[str, int] = ''
 ):
     """
     :return: list of dicts with info for all tickers
@@ -24,7 +25,7 @@ def load_list(
     if min_date > max_date:
         raise Exception("min_date must be less than or equal to max_date")
 
-    uri = "assets?min_date=" + str(min_date) + "&max_date=" + str(max_date)
+    uri = "assets?min_date=" + str(min_date) + "&max_date=" + str(max_date) + "&type=" + stocks_type
     js = request_with_retry(uri, None)
     js = js.decode()
     tickers = json.loads(js)
@@ -44,13 +45,20 @@ def load_list(
 load_assets = deprecated_wrap(load_list)
 
 
+def load_ndx_list(min_date: tp.Union[str, datetime.date, None] = None,
+        max_date: tp.Union[str, datetime.date, None] = None,
+        tail: tp.Union[datetime.timedelta, float, int] = 4 * 365):
+    return load_list(min_date, max_date, tail, stocks_type='NASDAQ100')
+
+
 def load_data(
         assets: tp.List[tp.Union[dict,str]] = None,
         min_date: tp.Union[str, datetime.date, None] = None,
         max_date: tp.Union[str, datetime.date, None] = None,
         dims: tp.Tuple[str, str, str] = (ds.FIELD, ds.TIME, ds.ASSET),
         forward_order: bool = True,
-        tail: tp.Union[datetime.timedelta, float, int] = DEFAULT_TAIL
+        tail: tp.Union[datetime.timedelta, float, int] = DEFAULT_TAIL,
+        stocks_type: tp.Union[str, int] = ''
 ) -> xr.DataArray:
     """
     :param assets: list of ticker names to load
@@ -62,7 +70,7 @@ def load_data(
     :return: xarray DataArray with historical data for selected assets
     """
     t = time.time()
-    data = load_origin_data(assets=assets, min_date=min_date, max_date=max_date, tail=tail)
+    data = load_origin_data(assets=assets, min_date=min_date, max_date=max_date, tail=tail, stocks_type=stocks_type)
     log_info("Data loaded " + str(round(time.time() - t)) + "s")
     data = adjust_by_splits(data, False)
     data = data.transpose(*dims)
@@ -70,6 +78,16 @@ def load_data(
         data = data.sel(**{ds.TIME: slice(None, None, -1)})
     data.name = "stocks"
     return data
+
+
+def load_ndx_data(assets: tp.List[tp.Union[dict,str]] = None,
+        min_date: tp.Union[str, datetime.date, None] = None,
+        max_date: tp.Union[str, datetime.date, None] = None,
+        dims: tp.Tuple[str, str, str] = (ds.FIELD, ds.TIME, ds.ASSET),
+        forward_order: bool = True,
+        tail: tp.Union[datetime.timedelta, float, int] = DEFAULT_TAIL,
+) -> xr.DataArray:
+    return load_data(assets, min_date, max_date, dims, forward_order, tail, stocks_type='NASDAQ100')
 
 
 def adjust_by_splits(data, make_copy=True):
@@ -114,7 +132,7 @@ BATCH_LIMIT = 300000
 
 
 def load_origin_data(assets=None, min_date=None, max_date=None,
-                     tail: tp.Union[datetime.timedelta, float, int] = 4 * 365):
+                     tail: tp.Union[datetime.timedelta, float, int] = 4 * 365, stocks_type=''):
     track_event("DATA_STOCKS_SERIES")
     setup_ids()
 
@@ -122,7 +140,7 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
         assets = [a['id'] if type(a) == dict else a for a in assets]
 
     if assets is None:
-        assets_array = load_list(min_date=min_date, max_date=max_date, tail=tail)
+        assets_array = load_list(min_date=min_date, max_date=max_date, tail=tail, stocks_type=stocks_type)
         assets_arg = [a['id'] for a in assets_array]
     else:
         assets_arg = assets
@@ -158,7 +176,7 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
 
     for offset in range(0, len(assets_arg), chunk_asset_count):
         chunk_assets = assets_arg[offset:(offset + chunk_asset_count)]
-        chunk = load_origin_data_chunk(chunk_assets, min_date.isoformat(), max_date.isoformat())
+        chunk = load_origin_data_chunk(chunk_assets, min_date.isoformat(), max_date.isoformat(), stocks_type)
         if chunk is not None:
             chunks.append(chunk)
         log_info(
@@ -199,11 +217,12 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
     return whole.dropna(ds.TIME, 'all')
 
 
-def load_origin_data_chunk(assets, min_date, max_date):  # min_date and max_date - iso date str
+def load_origin_data_chunk(assets, min_date, max_date, stocks_type):  # min_date and max_date - iso date str
     params = {
         'assets': assets,
         'min_date': min_date,
-        'max_date': max_date
+        'max_date': max_date,
+        'type': stocks_type
     }
     params = json.dumps(params)
     raw = request_with_retry("data", params.encode())
@@ -223,7 +242,7 @@ def setup_ids():
         js = request_with_retry('assets', None)
         js = js.decode()
         tickers = json.loads(js)
-        idt.USE_ID_TRANSLATION = next((i for i in tickers if i.get('FIGI') is not None), None) is not None
+        idt.USE_ID_TRANSLATION = next((i for i in tickers if i.get('symbol') is not None), None) is not None
         FIRST = False
 
 
