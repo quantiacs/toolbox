@@ -275,6 +275,7 @@ def backtest(
     data = load_data(lookback_period)
     try:
         if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long'\
+             or data.name == 'stocks_nasdaq100' and competition_type != 'stocks_nasdaq100'\
              or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures'\
              or data.name == 'crypto' and competition_type != 'crypto'\
              or data.name == 'futures' and competition_type != 'futures':

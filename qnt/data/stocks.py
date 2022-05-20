@@ -76,7 +76,7 @@ def load_data(
     data = data.transpose(*dims)
     if forward_order:
         data = data.sel(**{ds.TIME: slice(None, None, -1)})
-    data.name = "stocks"
+    data.name = "stocks_nasdaq100" if stocks_type == "NASDAQ100" else "stocks"
     return data
 
 

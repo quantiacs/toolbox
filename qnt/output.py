@@ -77,7 +77,7 @@ def clean(output, data, kind=None, debug=True):
             output = output.ffill('time')
             output = output.fillna(0)
 
-        if kind == "stocks" or kind == "stocks_long" \
+        if kind == "stocks" or kind == "stocks_long"  or kind == "stocks_nasdaq100"\
                 or kind == 'crypto_daily' or kind == 'cryptodaily'\
                 or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
             log_info("Check liquidity...")
@@ -100,7 +100,7 @@ def clean(output, data, kind=None, debug=True):
                 add = xr.full_like(add, np.nan)
                 output = xr.concat([output, add], dim='time')
                 output = output.fillna(0)
-                if kind == "stocks" or kind == "stocks_long" \
+                if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100"\
                         or kind == 'crypto_daily' or kind == 'cryptodaily' \
                         or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
                     output = output.where(data.sel(field='is_liquid') > 0)
@@ -118,7 +118,7 @@ def clean(output, data, kind=None, debug=True):
             else:
                 log_info("Ok.")
 
-        if kind == "stocks" or kind == "stocks_long":
+        if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100":
             log_info("Check exposure...")
             if not qns.check_exposure(output):
                 log_info("Cut big positions...")
@@ -160,7 +160,7 @@ def check(output, data, kind=None):
         output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))
 
     try:
-        if kind == "stocks" or kind == "stocks_long" \
+        if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100"\
                 or kind == 'crypto_daily' or kind == 'cryptodaily' \
                 or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
             log_info("Check liquidity...")
@@ -181,7 +181,7 @@ def check(output, data, kind=None):
                 log_info("Ok.")
             track_event("OUTPUT_CHECK")
 
-        if kind == "stocks" or kind == "stocks_long":
+        if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100":
             log_info("Check exposure...")
             if not qns.check_exposure(output):
                 log_err("Use more assets or/and use qnt.output.clean")
