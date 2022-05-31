@@ -118,7 +118,7 @@ def clean(output, data, kind=None, debug=True):
             else:
                 log_info("Ok.")
 
-        if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100":
+        if kind == "stocks" or kind == "stocks_long":
             log_info("Check exposure...")
             if not qns.check_exposure(output):
                 log_info("Cut big positions...")
@@ -181,7 +181,7 @@ def check(output, data, kind=None):
                 log_info("Ok.")
             track_event("OUTPUT_CHECK")
 
-        if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100":
+        if kind == "stocks" or kind == "stocks_long":
             log_info("Check exposure...")
             if not qns.check_exposure(output):
                 log_err("Use more assets or/and use qnt.output.clean")
