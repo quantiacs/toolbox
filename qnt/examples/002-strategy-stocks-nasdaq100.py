@@ -49,5 +49,3 @@ qngraph.make_major_plots(stats) # works in jupyter
 #     build_plots=True
 # )
 # # ---
-
-# print(qnstats.calc_sector_distribution(weights, weights.time).sector.values.tolist())
