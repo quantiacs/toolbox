@@ -46,7 +46,7 @@ qngraph.make_major_plots(stats) # works in jupyter
 #     start_date="2006-01-01",
 #     strategy=strategy,
 #     analyze=True,
-#     build_plots=False
+#     build_plots=True
 # )
 # # ---
 
