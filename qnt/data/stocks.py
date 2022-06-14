@@ -136,14 +136,16 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
     track_event("DATA_STOCKS_SERIES")
     setup_ids()
 
-    if assets is not None:
-        assets = [a['id'] if type(a) == dict else a for a in assets]
-
     if assets is None:
         assets_array = load_list(min_date=min_date, max_date=max_date, tail=tail, stocks_type=stocks_type)
         assets_arg = [a['id'] for a in assets_array]
     else:
+        if not idt.is_asset_ids_cache_exist():
+            load_list(min_date="2005-01-01", stocks_type=stocks_type)
+
+        assets = [a['id'] if type(a) == dict else a for a in assets]
         assets_arg = assets
+
     assets_arg = [idt.translate_user_id_to_server_id(id) for id in assets_arg]
 
     assets_arg = list(set(assets_arg))  # rm duplicates
