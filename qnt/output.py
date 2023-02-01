@@ -74,7 +74,8 @@ def clean(output, data, kind=None, debug=True):
             log_info("ffill if the current price is None...")
             output = output.fillna(0)
             output = output.where(np.isfinite(data.sel(field='close')))
-            output = output.ffill('time')
+            if kind != "stocks_nasdaq100":
+                output = output.ffill('time')
             output = output.fillna(0)
 
         if kind == "stocks" or kind == "stocks_long"  or kind == "stocks_nasdaq100"\
