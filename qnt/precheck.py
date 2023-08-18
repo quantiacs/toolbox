@@ -24,7 +24,7 @@ result_dir = "precheck_results"
 def run_init():
     if os.path.exists("init.ipynb"):
         log_info("Run init.ipynb..")
-        cmd = " jupyter nbconvert --to html --ExecutePreprocessor.timeout=1800 --execute init.ipynb --stdout "  + \
+        cmd = " jupyter nbconvert --to html --ExecutePreprocessor.timeout=1800 --execute init.ipynb --stdout " + \
               "| html2text -utf8"
         # "\\\n 2>&1"
         log_info("cmd:", cmd)
@@ -38,7 +38,6 @@ def run_init():
 
 
 def evaluate_passes(data_type='stocks', passes=3, dates=None):
-
     log_info("Output directory is:", result_dir)
     os.makedirs(result_dir, exist_ok=True)
 
@@ -57,7 +56,7 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
             data = data.where(data.sel(field='is_liquid') > 0).dropna('time', 'all')
         data = data.time
         dates = [data.isel(time=-1).values, data.isel(time=1).values] \
-                + [data.isel(time=round(len(data) * (i+1)/(passes-1))).values for i in range(passes-2)]
+                + [data.isel(time=round(len(data) * (i + 1) / (passes - 1))).values for i in range(passes - 2)]
         dates = list(set(dates))
         dates.sort()
         dates = [pd.Timestamp(i).date() for i in dates]
@@ -87,7 +86,7 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
         i += 1
         log_info("pass:", i, "/", len(dates), "max_date:", date.isoformat())
 
-        if data_type == 'stocks' or data_type == 'stocks_long':
+        if data_type == 'stocks' or data_type == 'stocks_long' or data_type == 'stocks_nasdaq100':
             timeout = 30 * 60
         if data_type == 'futures':
             timeout = 10 * 60
@@ -99,8 +98,9 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
               "LAST_DATA_PATH=" + last_data_fn + " \\\n" + \
               "OUTPUT_PATH=" + fractions_fn + " \\\n" + \
               "SUBMISSION_ID=-1\\\n" + \
-              " jupyter nbconvert --to html --ExecutePreprocessor.timeout=" + str(timeout)+ " --execute strategy.ipynb --output=" + html_fn  # + \
-              # "\\\n 2>&1"
+              " jupyter nbconvert --to html --ExecutePreprocessor.timeout=" + str(
+            timeout) + " --execute strategy.ipynb --output=" + html_fn  # + \
+        # "\\\n 2>&1"
         log_info("cmd:", cmd)
         log_info("output:")
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, executable='bash')
@@ -130,7 +130,7 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
             data = qnt.data.load_data_by_type(data_type, assets=output.asset.values.tolist(),
                                               min_date=str(output.time.min().values)[:10], max_date=date)
 
-            if data_type == 'stocks' or data_type == 'stocks_long':
+            if data_type == 'stocks' or data_type == 'stocks_long' or data_type == 'stocks_nasdaq100':
                 non_liquid = qnt.stats.calc_non_liquid(data, output)
                 if len(non_liquid.time) > 0:
                     log_err("ERROR! The output contains illiquid positions.")
@@ -207,7 +207,8 @@ def load_output(fn, date):
 
 def check_output(output, data_type='stocks'):
     if data_type != 'stocks' and data_type != 'stocks_long' and data_type != 'futures' \
-            and data_type != 'crypto' and data_type != 'crypto_futures' and data_type != 'cryptofutures':
+            and data_type != 'crypto' and data_type != 'crypto_futures' and data_type != 'cryptofutures' \
+            and data_type != 'stocks_nasdaq100':
         log_err("Unsupported data_type", data_type)
         return
 
@@ -219,7 +220,8 @@ def check_output(output, data_type='stocks'):
         log_err("ERROR! In sample period does not contain enough points. " +
                 str(len(output_tail)) + " < " + str(in_sample_points))
     else:
-        log_info("Ok. In sample period contains enough points." + str(len(output_tail)) + " >= " + str(in_sample_points))
+        log_info(
+            "Ok. In sample period contains enough points." + str(len(output_tail)) + " >= " + str(in_sample_points))
 
     log_info()
 

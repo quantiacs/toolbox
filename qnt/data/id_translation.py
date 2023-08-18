@@ -80,3 +80,10 @@ def translate_server_id_to_user_id(server_id):
         return server_id
     load_id_translation_table()
     return server_id_to_user_id.get(server_id, server_id)
+
+
+def is_asset_ids_cache_exist():
+    global server_id_to_user_id, user_id_to_server_id
+    if server_id_to_user_id is not None and user_id_to_server_id is not None:
+        return True
+    return False

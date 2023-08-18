@@ -1,4 +1,4 @@
-from .data import f, ds, stocks_load_list, get_env, futures_load_list
+from .data import f, ds, stocks_load_list, get_env, futures_load_list, stocks_load_ndx_list
 from .data.common import track_event
 from .output import normalize as output_normalize
 from qnt.log import log_info, log_err
@@ -11,8 +11,6 @@ from tabulate import tabulate
 import numba
 import sys, os
 from qnt.output import normalize
-
-
 
 EPS = 10 ** -7
 
@@ -59,14 +57,15 @@ def calc_relative_return(data, portfolio_history,
     if roll_slippage_factor is None:
         roll_slippage_factor = get_default_slippage(data)
 
-    target_weights = portfolio_history.shift(**{ds.TIME: 1}) # shift
+    target_weights = portfolio_history.shift(**{ds.TIME: 1})  # shift
     target_weights[{ds.TIME: 0}] = 0
     min_time = target_weights.coords[ds.TIME].min()
 
     slippage = calc_slippage(data, 14, slippage_factor, points_per_year=points_per_year)
     roll_slippage = calc_slippage(data, 14, roll_slippage_factor, points_per_year=points_per_year)
 
-    data, target_weights, slippage, roll_slippage = arrange_data(data, target_weights, per_asset, slippage, roll_slippage)
+    data, target_weights, slippage, roll_slippage = arrange_data(data, target_weights, per_asset, slippage,
+                                                                 roll_slippage)
 
     # adjust weights according to price changes close->open : W_open = W_close_prev * OPEN / CLOSE_prev
     prev_close = data.loc[f.CLOSE].shift(**{ds.TIME: 1}).ffill(ds.TIME)
@@ -137,7 +136,7 @@ def calc_relative_return_np_per_asset(WEIGHT, UNLOCKED, OPEN, CLOSE, SLIPPAGE, D
         equity_after_buy[t] = equity_before_buy[t] - S
 
         if ROLL is not None and t > 0:
-            pN = np.where(np.sign(N[t]) == np.sign(N[t-1]), np.minimum(np.abs(N[t]), np.abs(N[t-1])), 0)
+            pN = np.where(np.sign(N[t]) == np.sign(N[t - 1]), np.minimum(np.abs(N[t]), np.abs(N[t - 1])), 0)
             R = np.sign(N[t]) * pN * ROLL[t] + pN * ROLL_SLIPPAGE[t]
             equity_after_buy[t] -= R
 
@@ -159,7 +158,7 @@ def calc_relative_return_np_per_asset(WEIGHT, UNLOCKED, OPEN, CLOSE, SLIPPAGE, D
     # Ep = np.roll(E, 1, axis=0)
     Ep = E.copy()
     for i in range(1, Ep.shape[0]):
-        Ep[i] = E[i-1]
+        Ep[i] = E[i - 1]
     Ep[0] = 1
     RR = E / Ep - 1
     RR = np.where(np.isfinite(RR), RR, 0)
@@ -204,7 +203,7 @@ def calc_relative_return_np(WEIGHT, UNLOCKED, OPEN, CLOSE, SLIPPAGE, DIVS, ROLL,
             equity_after_buy[t] = equity_before_buy[t] - S
 
         if ROLL is not None and t > 0:
-            pN = np.where(np.sign(N[t]) == np.sign(N[t-1]), np.minimum(np.abs(N[t]), np.abs(N[t-1])), 0)
+            pN = np.where(np.sign(N[t]) == np.sign(N[t - 1]), np.minimum(np.abs(N[t]), np.abs(N[t - 1])), 0)
             R = np.sign(N[t]) * pN * ROLL[t] + pN * ROLL_SLIPPAGE[t]
             equity_after_buy[t] -= np.nansum(R)
 
@@ -339,12 +338,12 @@ def calc_mean_return(relative_return, max_periods=None, min_periods=1, points_pe
     if points_per_year is None:
         points_per_year = calc_avg_points_per_year(relative_return)
     if max_periods is None:
-        max_periods =  len(relative_return.coords[ds.TIME])
+        max_periods = len(relative_return.coords[ds.TIME])
     max_periods = min(max_periods, len(relative_return.coords[ds.TIME]))
     min_periods = min(min_periods, max_periods)
-    return xr.ufuncs.exp(
-        xr.ufuncs.log(relative_return + 1).rolling({ds.TIME: max_periods}, min_periods=min_periods).mean(
-            skipna=True)) - 1
+    return np.exp(
+        np.log(relative_return + 1).rolling({ds.TIME: max_periods},
+                                            min_periods=min_periods).mean(skipna=True)) - 1
 
 
 def calc_mean_return_annualized(relative_return, max_periods=None, min_periods=1, points_per_year=None):
@@ -355,9 +354,9 @@ def calc_mean_return_annualized(relative_return, max_periods=None, min_periods=1
     """
     if points_per_year is None:
         points_per_year = calc_avg_points_per_year(relative_return)
-    power = func_np_to_xr(np.power)
-    return power(calc_mean_return(relative_return, max_periods, min_periods, points_per_year=points_per_year) + 1,
-                 points_per_year) - 1
+
+    return np.power(calc_mean_return(relative_return, max_periods, min_periods, points_per_year=points_per_year) + 1,
+                    points_per_year) - 1
 
 
 def calc_bias(portfolio_history, per_asset=False):
@@ -500,6 +499,7 @@ def calc_avg_holding_time(portfolio_history,
 
     return res / points_per_day
 
+
 @numba.jit
 def calc_holding_log_np_nb(weights: np.ndarray) -> np.ndarray:  # , equity: np.ndarray, open: np.ndarray) -> np.ndarray:
     prev_pos = np.zeros(weights.shape[1])
@@ -553,9 +553,9 @@ def find_missed_dates(output, data):
 
     data_ts = data.where(data.time >= min_out_ts)
     if f.IS_LIQUID in data.coords[ds.FIELD]:
-        data_ts = data_ts.where(data.sel({ds.FIELD:f.IS_LIQUID}) > 0)
+        data_ts = data_ts.where(data.sel({ds.FIELD: f.IS_LIQUID}) > 0)
     else:
-        data_ts = data_ts.where(data.sel({ds.FIELD:f.CLOSE}) > 0)
+        data_ts = data_ts.where(data.sel({ds.FIELD: f.CLOSE}) > 0)
     data_ts = data_ts.dropna(ds.TIME, 'all').coords[ds.TIME]
     data_ts = np.sort(data_ts.values)
     missed = np.setdiff1d(data_ts, out_ts)
@@ -565,11 +565,11 @@ def find_missed_dates(output, data):
 def calc_avg_points_per_year(data: xr.DataArray):
     if len(data.time) < 251:
         if data.name == 'crypto':
-            return round(365.25*24)
-        if data.name in [ 'cryptofutures', 'crypto_futures', 'crypto_daily', 'cryptodaily',
-                          'crypto_daily_long']:
+            return round(365.25 * 24)
+        if data.name in ['cryptofutures', 'crypto_futures', 'crypto_daily', 'cryptodaily',
+                         'crypto_daily_long', 'crypto_daily_long_short']:
             return 365
-        if data.name in ['stocks', 'stocks_long', 'futures']:
+        if data.name in ['stocks', 'stocks_long', 'futures', 'stocks_nasdaq100']:
             return 251
     t = np.sort(data.coords[ds.TIME].values)
     tp = np.roll(t, 1)
@@ -586,13 +586,15 @@ def get_default_is_period(data):
 
 
 def get_default_is_period_for_type(name):
+    if name == 'stocks_nasdaq100':
+        return int(get_env('IS_STOCKS_NASDAQ100', '3528', True))
     if name == 'stocks' or name == 'stocks_long':
         return int(get_env('IS_STOCKS', '1512', True))
     if name == 'futures':
         return int(get_env('IS_FUTURES', '3528', True))
     if name == 'cryptofutures' or name == 'crypto_futures':
         return int(get_env('IS_CRYPTOFUTURES', '1764', True))
-    if name == 'cryptodaily' or name == 'crypto_daily' or name == 'crypto_daily_long':
+    if name == 'cryptodaily' or name == 'crypto_daily' or name == 'crypto_daily_long' or name == 'crypto_daily_long_short':
         return int(get_env('IS_CRYPTOFUTURES', '1764', True))
     if name == 'crypto':
         return int(get_env('IS_CRYPTO', '60000', True))
@@ -600,13 +602,15 @@ def get_default_is_period_for_type(name):
 
 
 def get_default_is_start_date_for_type(name):
+    if name == 'stocks_nasdaq100':
+        return get_env('SD_STOCKS_NASDAQ100', '2006-01-01', True)
     if name == 'stocks' or name == 'stocks_long':
         return get_env('SD_STOCKS', '2015-01-01', True)
     if name == 'futures':
         return get_env('SD_FUTURES', '2006-01-01', True)
     if name == 'cryptofutures' or name == 'crypto_futures':
         return get_env('SD_CRYPTOFUTURES', '2014-01-01', True)
-    if name == 'cryptodaily' or name == 'crypto_daily' or name == 'crypto_daily_long':
+    if name == 'cryptodaily' or name == 'crypto_daily' or name == 'crypto_daily_long' or name == 'crypto_daily_long_short':
         return get_env('SD_CRYPTODAILY', '2014-01-01', True)
     if name == 'crypto':
         return get_env('SD_CRYPTO', '2014-01-01', True)
@@ -614,13 +618,15 @@ def get_default_is_start_date_for_type(name):
 
 
 def get_default_slippage(data):
+    if data.name == 'stocks_nasdaq100':
+        return float(get_env('SL_STOCKS_NASDAQ100', '0.05', True))
     if data.name == 'stocks':
         return float(get_env('SL_STOCKS', '0.05', True))
     if data.name == 'futures':
         return float(get_env('SL_FUTURES', '0.04', True))
     if data.name == 'cryptofutures' or data.name == 'crypto_futures':
         return float(get_env('SL_CRYPTOFUTURES', '0.04', True))
-    if data.name == 'cryptodaily' or data.name == 'crypto_daily' or data.name == 'crypto_daily_long':
+    if data.name == 'cryptodaily' or data.name == 'crypto_daily' or data.name == 'crypto_daily_long' or data.name == 'crypto_daily_long_short':
         return float(get_env('SL_CRYPTODAILY', '0.04', True))
     if data.name == 'crypto':
         return float(get_env('SL_CRYPTO', '0.05', True))
@@ -632,21 +638,6 @@ def calc_points_per_day(days_per_year):
         return 1
     else:
         return 24
-
-
-def func_np_to_xr(origin_func):
-    '''
-    Decorates numpy function for xarray
-    '''
-    func = xr.ufuncs._UFuncDispatcher(origin_func.__name__)
-    func.__name__ = origin_func.__name__
-    doc = origin_func.__doc__
-    func.__doc__ = ('xarray specific variant of numpy.%s. Handles '
-                    'xarray.Dataset, xarray.DataArray, xarray.Variable, '
-                    'numpy.ndarray and dask.array.Array objects with '
-                    'automatic dispatching.\n\n'
-                    'Documentation from numpy:\n\n%s' % (origin_func.__name__, doc))
-    return func
 
 
 class StatFields:
@@ -667,7 +658,7 @@ stf = StatFields
 
 
 def calc_stat(data, portfolio_history,
-              slippage_factor = None, roll_slippage_factor = None,
+              slippage_factor=None, roll_slippage_factor=None,
               min_periods=1, max_periods=None,
               per_asset=False, points_per_year=None):
     """
@@ -704,7 +695,8 @@ def calc_stat(data, portfolio_history,
     if len(non_liquid.coords[ds.TIME]) > 0:
         log_err("WARNING: Strategy trades non-liquid assets.")
 
-    RR = calc_relative_return(data, portfolio_history, slippage_factor, roll_slippage_factor, per_asset, points_per_year)
+    RR = calc_relative_return(data, portfolio_history, slippage_factor, roll_slippage_factor, per_asset,
+                              points_per_year)
 
     E = calc_equity(RR)
     V = calc_volatility_annualized(RR, max_periods=max_periods, min_periods=min_periods,
@@ -774,7 +766,10 @@ def calc_sector_distribution(portfolio_history, timeseries=None, kind=None):
 
     if kind is None:
         kind = portfolio_history.name
-    if kind == 'stocks' or kind == 'stocks_long':
+
+    if kind == 'stocks_nasdaq100':
+        assets = stocks_load_ndx_list(min_date=min_date, max_date=max_date)
+    elif kind == 'stocks' or kind == 'stocks_long':
         assets = stocks_load_list(min_date=min_date, max_date=max_date)
     elif kind == 'futures':
         assets = futures_load_list()
@@ -843,7 +838,8 @@ def check_correlation(portfolio_history, data, print_stack_trace=True):
     log_err("WARNING! This strategy correlates with other strategies and will be rejected.")
     log_err("Modify the strategy to produce the different output.")
     log_info("The number of systems with a larger Sharpe ratio and correlation larger than 0.9:", len(cr_list))
-    log_info("The max correlation value (with systems with a larger Sharpe ratio):", max([i['cofactor'] for i in cr_list]))
+    log_info("The max correlation value (with systems with a larger Sharpe ratio):",
+             max([i['cofactor'] for i in cr_list]))
     my_cr = [i for i in cr_list if i['my']]
 
     log_info("Current sharpe ratio(3y):",
@@ -882,7 +878,8 @@ def calc_correlation(relative_returns, suppress_exception=True):
             log_info("correlation check disabled")
             return []
 
-        ENGINE_CORRELATION_URL = get_env("ENGINE_CORRELATION_URL", "https://quantiacs.io/referee/submission/forCorrelation")
+        ENGINE_CORRELATION_URL = get_env("ENGINE_CORRELATION_URL",
+                                         "https://quantiacs.io/referee/submission/forCorrelation")
         STATAN_CORRELATION_URL = get_env("STATAN_CORRELATION_URL", "https://quantiacs.io/statan/correlation")
         PARTICIPANT_ID = get_env("PARTICIPANT_ID", "0")
 
@@ -898,7 +895,7 @@ def calc_correlation(relative_returns, suppress_exception=True):
 
         cofactors = []
 
-        chunks = [submission_ids[x:x+50] for x in range(0, len(submission_ids), 50)]
+        chunks = [submission_ids[x:x + 50] for x in range(0, len(submission_ids), 50)]
 
         for c in chunks:
             r = {"relative_returns": rr, "submission_ids": c}
@@ -929,7 +926,7 @@ def calc_correlation(relative_returns, suppress_exception=True):
 def check_exposure(portfolio_history,
                    soft_limit=0.05, hard_limit=0.1,
                    days_tolerance=0.02, excess_tolerance=0.02,
-                   avg_period=252, check_period=252*5
+                   avg_period=252, check_period=252 * 5
                    ):
     """
     Checks exposure according to the submission filters.
@@ -942,7 +939,7 @@ def check_exposure(portfolio_history,
     :param check_period: period for checking
     :return:
     """
-    portfolio_history = portfolio_history.loc[{ds.TIME:np.sort(portfolio_history.coords[ds.TIME])}]
+    portfolio_history = portfolio_history.loc[{ds.TIME: np.sort(portfolio_history.coords[ds.TIME])}]
 
     exposure = calc_exposure(portfolio_history)
     max_exposure = exposure.max(ds.ASSET)
@@ -985,8 +982,5 @@ def calc_exposure(portfolio_history):
     :return:
     """
     sum = abs(portfolio_history).sum(ds.ASSET)
-    sum = sum.where(sum > EPS, 1) # prevents div by zero
+    sum = sum.where(sum > EPS, 1)  # prevents div by zero
     return abs(portfolio_history) / sum
-
-
-
