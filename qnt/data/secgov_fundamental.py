@@ -11,121 +11,114 @@ from qnt.data.stocks import load_list
 
 
 class CacheHelper:
-    cache = dict()
+    def __init__(self):
+        self.cache = {}
 
     def is_in_cache(self, key):
-        if key not in self.cache:
-            return False
-        return True
+        return key in self.cache
 
     def get(self, key):
-        # print("get " + key)
         return self.cache[key].copy(deep=True)
 
     def add(self, key, value):
-        # print("add " + key)
         self.cache[key] = value
 
     def empty(self):
-        self.cache = dict()
+        self.cache = {}
 
     @staticmethod
     def get_key_for(all_facts, market_data, fact_name, new_name, use_report_date):
-        close_price = market_data.sel(field='close')
-        close_price_df = close_price.to_pandas()
+        close_price_df = market_data.sel(field='close').to_pandas()
         name_ticker = close_price_df.columns[0]
-        return name_ticker + "_" + fact_name + "_" + new_name + "_" + str(use_report_date)
+        return f"{name_ticker}_{fact_name}_{new_name}_{str(use_report_date)}"
 
 
 global_cache = CacheHelper()
 
 
-def get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy):
+def fetch_from_cache_or_compute(all_facts, market_data, fact_name, new_name, use_report_date, build_strategy,
+                                computation_func):
     key = global_cache.get_key_for(all_facts, market_data, fact_name, new_name, use_report_date)
+
     if global_cache.is_in_cache(key):
         return global_cache.get(key)
-    facts = get_filtered(all_facts, [fact_name])
-    indicator = PeriodIndicatorBuilder(new_name, [fact_name], use_report_date, 'ltm', build_ltm_strategy)
-    r = indicator.build_series_dict(
-        facts)
 
-    result = get_df(r, market_data, new_name)
+    result = computation_func(all_facts, market_data, fact_name, new_name, use_report_date, build_strategy)
     global_cache.add(key, result)
     return result.copy()
+
+
+def get_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy):
+    return fetch_from_cache_or_compute(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy,
+                                       _compute_ltm)
+
+
+def _compute_ltm(all_facts, market_data, fact_name, new_name, use_report_date, build_ltm_strategy):
+    facts = get_filtered(all_facts, [fact_name])
+    indicator = PeriodIndicatorBuilder(new_name, [fact_name], use_report_date, 'ltm', build_ltm_strategy)
+    series_data = indicator.build_series_dict(facts)
+    return get_df(series_data, market_data, new_name)
 
 
 def get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy):
-    key = global_cache.get_key_for(all_facts, market_data, fact_name, new_name, use_report_date)
-    if global_cache.is_in_cache(key):
-        return global_cache.get(key)
+    return fetch_from_cache_or_compute(all_facts, market_data, fact_name, new_name, use_report_date,
+                                       build_instant_strategy, _compute_annual)
 
+
+def _compute_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy):
     facts = get_filtered(all_facts, [fact_name])
     facts_no_segment = [f for f in facts if 'segment' not in f or f['segment'] is None]
-    indicator_df = get_simple_indicator(facts_no_segment, market_data,
-                                        fact_name, use_report_date, build_instant_strategy)
+    indicator_df = get_simple_indicator(facts_no_segment, market_data, fact_name, use_report_date,
+                                        build_instant_strategy)
     indicator_df[new_name] = indicator_df[fact_name]
-    result = indicator_df.drop(columns=[fact_name])
-    global_cache.add(key, result)
-    return result.copy()
+    return indicator_df.drop(columns=[fact_name])
 
 
 def get_filtered(all_facts, facts_names, count_days_for_remove_old_period=366):
-    r = []
-    for fact in all_facts:
-        if fact['fact_name'] in facts_names:
-            r.append(fact)
-    rr = get_filtered_by_period(r, count_days_for_remove_old_period)
-    return rr
+    matching_facts = [fact for fact in all_facts if fact['fact_name'] in facts_names]
+    return get_filtered_by_period(matching_facts, count_days_for_remove_old_period)
 
 
 def get_filtered_by_period(all_facts, count_days_for_remove_old_period):
-    r = []
+    valid_facts = []
     for fact in all_facts:
-        report_date = fact['report_date']
-        if type(fact['period']) not in [str, list]:
-            continue
-        if type(fact['period']) is str:
-            period_end = fact['period']
-        if type(fact['period']) is list:
-            period_end = fact['period'][1]
+        report_date = fact.get('report_date')
+        period = fact.get('period')
 
+        if not isinstance(period, (str, list)):
+            continue
+
+        period_end = period if isinstance(period, str) else period[1]
         report_date_time = dt.datetime.strptime(report_date, '%Y-%m-%d')
         period_end_time = dt.datetime.strptime(period_end, '%Y-%m-%d')
 
-        dist = (report_date_time - period_end_time).days
-
-        if dist < count_days_for_remove_old_period:
-            r.append(fact)
-
-    return r
+        if (report_date_time - period_end_time).days < count_days_for_remove_old_period:
+            valid_facts.append(fact)
+    return valid_facts
 
 
 def get_simple_indicator(all_facts, market_data, fact_name, use_report_date, build_instant_strategy):
-    indicator = InstantIndicatorBuilder(fact_name,
-                                        fact_name,
-                                        use_report_date, build_instant_strategy)
-    f = get_filtered(all_facts, fact_name)
-    indicator_series = indicator.build_series_dict(f)
-    df = get_df(indicator_series, market_data, fact_name)
-    return df
+    indicator = InstantIndicatorBuilder(fact_name, fact_name, use_report_date, build_instant_strategy)
+    filtered_facts = get_filtered(all_facts, fact_name)
+    indicator_series = indicator.build_series_dict(filtered_facts)
+    return get_df(indicator_series, market_data, fact_name)
 
 
-def get_df(serias_facts, market_data, name):
+def get_df(series_facts, market_data, name):
     time_coord = market_data.time
     min_date = pd.Timestamp(time_coord.min().values).to_pydatetime().date()
-    series = [
-        pd.Series(serias_facts if len(serias_facts) > 0 else {min_date.isoformat(): np.NaN}, dtype=np.float64,
-                  name=name)]
-    df = pd.concat(series, axis=1)
+    series_data = series_facts if len(series_facts) > 0 else {min_date.isoformat(): np.NaN}
+    series_obj = pd.Series(series_data, dtype=np.float64, name=name)
+
+    df = pd.concat([series_obj], axis=1)
     df.index = df.index.astype(dtype=time_coord.dtype, copy=False)
-    df.name = name
 
     time_coord_df = time_coord.to_pandas()
     time_coord_df.name = 'time'
-    merge = df.join(time_coord_df, how='outer')
-    merge[name] = merge[name].fillna(method="ffill")
-    r = merge.drop(columns=['time'])
-    return r
+
+    merged_df = df.join(time_coord_df, how='outer')
+    merged_df[name] = merged_df[name].fillna(method="ffill")
+    return merged_df.drop(columns=['time'])
 
 
 def build_losses_on_extinguishment_of_debt(all_facts, market_data, use_report_date, build_ltm_strategy,
@@ -187,169 +180,48 @@ def build_debt(all_facts, market_data, use_report_date, build_ltm_strategy, buil
     def get_merged(row):
         mix_current = row['long_term_debt_and_capital_lease_obligations_current']
         mix_non_current = row['long_term_debt_and_capital_lease_obligations_non_current']
-
-        long_term_debt_current = row['long_term_debt_current']
-        long_term_debt_non_current = row['long_term_debt_non_current']
-
-        capital_lease_obligations_current = row['capital_lease_obligations_current']
-        capital_lease_obligations_non_current = row['capital_lease_obligations_non_current']
-
-        short_term_borrowings = row['short_term_borrowings']
-        commercial_paper = row['commercial_paper']
-
         if not math.isnan(mix_current) and not math.isnan(mix_non_current):
             if mix_current + mix_non_current != 0:
-                return mix_current + mix_non_current + short_term_borrowings + commercial_paper
+                return mix_current + mix_non_current + row['short_term_borrowings'] + row['commercial_paper']
 
-        debt = long_term_debt_current + long_term_debt_non_current + capital_lease_obligations_current + capital_lease_obligations_non_current
+        other_debts = sum(row[key] for key in
+                          ['long_term_debt_current', 'long_term_debt_non_current', 'capital_lease_obligations_current',
+                           'capital_lease_obligations_non_current', 'finance_lease_liability_current',
+                           'finance_lease_liability_non_current', 'operating_lease_liability_current',
+                           'operating_lease_liability_non_current', 'short_term_borrowings', 'commercial_paper'])
 
-        finance_lease_liability_current = row['finance_lease_liability_current']
-        finance_lease_liability_non_current = row['finance_lease_liability_non_current']
+        return other_debts
 
-        operating_lease_liability_current = row['operating_lease_liability_current']
-        operating_lease_liability_non_current = row['operating_lease_liability_non_current']
+    def build_metric(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy):
+        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy).fillna(
+            0)
 
-        return debt + finance_lease_liability_current + finance_lease_liability_non_current + \
-               operating_lease_liability_current + operating_lease_liability_non_current + \
-               short_term_borrowings + commercial_paper
+    # Mapping for building each debt metric
+    metrics_mapping = {
+        'long_term_debt_and_capital_lease_obligations_current': 'us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent',
+        'long_term_debt_and_capital_lease_obligations_non_current': 'us-gaap:LongTermDebtAndCapitalLeaseObligations',
+        'short_term_borrowings': 'us-gaap:ShortTermBorrowings',
+        'finance_lease_liability_current': 'us-gaap:FinanceLeaseLiabilityCurrent',
+        'finance_lease_liability_non_current': 'us-gaap:FinanceLeaseLiabilityNoncurrent',
+        'long_term_debt_current': 'us-gaap:LongTermDebtCurrent',
+        'long_term_debt_non_current': 'us-gaap:LongTermDebtNoncurrent',
+        'capital_lease_obligations_current': 'us-gaap:CapitalLeaseObligationsCurrent',
+        'capital_lease_obligations_non_current': 'us-gaap:CapitalLeaseObligationsNoncurrent',
+        'operating_lease_liability_current': 'us-gaap:OperatingLeaseLiabilityCurrent',
+        'operating_lease_liability_non_current': 'us-gaap:OperatingLeaseLiabilityNoncurrent',
+        'commercial_paper': 'us-gaap:CommercialPaper'
+    }
 
-    def build_long_term_debt_and_capital_lease_obligations_current(all_facts, market_data, use_report_date,
-                                                                   build_ltm_strategy, build_instant_strategy):
-        fact_name = 'us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent'
-        new_name = 'long_term_debt_and_capital_lease_obligations_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+    debt = {key: build_metric(all_facts, market_data, fact, key, use_report_date, build_instant_strategy) for key, fact
+            in metrics_mapping.items()}
 
-    def build_long_term_debt_and_capital_lease_obligations_non_current(all_facts, market_data, use_report_date,
-                                                                       build_ltm_strategy, build_instant_strategy):
-        fact_name = 'us-gaap:LongTermDebtAndCapitalLeaseObligations'
-        new_name = 'long_term_debt_and_capital_lease_obligations_non_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+    df_debt = debt['long_term_debt_and_capital_lease_obligations_current']
+    for key in debt:
+        df_debt[key] = debt[key]
 
-    def build_short_term_borrowings(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                    build_instant_strategy):
-        fact_name = 'us-gaap:ShortTermBorrowings'
-        new_name = 'short_term_borrowings'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
+    df_debt['debt'] = df_debt.apply(get_merged, axis=1)
 
-    def build_finance_lease_liability_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                              build_instant_strategy):
-        fact_name = 'us-gaap:FinanceLeaseLiabilityCurrent'
-        new_name = 'finance_lease_liability_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    def build_finance_lease_liability_non_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                                  build_instant_strategy):
-        fact_name = 'us-gaap:FinanceLeaseLiabilityNoncurrent'
-        new_name = 'finance_lease_liability_non_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    def build_long_term_debt_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                     build_instant_strategy):
-        fact_name = 'us-gaap:LongTermDebtCurrent'
-        new_name = 'long_term_debt_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    def build_long_term_debt_non_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                         build_instant_strategy):
-        fact_name = 'us-gaap:LongTermDebtNoncurrent'
-        new_name = 'long_term_debt_non_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    def build_capital_lease_obligations_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                                build_instant_strategy):
-        fact_name = 'us-gaap:CapitalLeaseObligationsCurrent'
-        new_name = 'capital_lease_obligations_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    def build_capital_lease_obligations_non_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                                    build_instant_strategy):
-        fact_name = 'us-gaap:CapitalLeaseObligationsNoncurrent'
-        new_name = 'capital_lease_obligations_non_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    def build_operating_lease_liability_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                                build_instant_strategy):
-        fact_name = 'us-gaap:OperatingLeaseLiabilityCurrent'
-        new_name = 'operating_lease_liability_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    def build_operating_lease_liability_non_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                                    build_instant_strategy):
-        fact_name = 'us-gaap:OperatingLeaseLiabilityNoncurrent'
-        new_name = 'operating_lease_liability_non_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    def build_commercial_paper(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
-        fact_name = 'us-gaap:CommercialPaper'
-        new_name = 'commercial_paper'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    debt = build_long_term_debt_and_capital_lease_obligations_current(all_facts, market_data, use_report_date,
-                                                                      build_ltm_strategy, build_instant_strategy)
-    debt[
-        'long_term_debt_and_capital_lease_obligations_non_current'] = build_long_term_debt_and_capital_lease_obligations_non_current(
-        all_facts, market_data, use_report_date,
-        build_ltm_strategy, build_instant_strategy)
-
-    debt['long_term_debt_current'] = build_long_term_debt_current(all_facts, market_data, use_report_date,
-                                                                  build_ltm_strategy, build_instant_strategy).fillna(0)
-    debt['long_term_debt_non_current'] = build_long_term_debt_non_current(all_facts, market_data, use_report_date,
-                                                                          build_ltm_strategy,
-                                                                          build_instant_strategy).fillna(0)
-
-    debt['capital_lease_obligations_current'] = build_capital_lease_obligations_current(all_facts,
-                                                                                        market_data,
-                                                                                        use_report_date,
-                                                                                        build_ltm_strategy,
-                                                                                        build_instant_strategy).fillna(
-        0)
-
-    debt['capital_lease_obligations_non_current'] = build_capital_lease_obligations_non_current(all_facts,
-                                                                                                market_data,
-                                                                                                use_report_date,
-                                                                                                build_ltm_strategy,
-                                                                                                build_instant_strategy).fillna(
-        0)
-
-    debt['operating_lease_liability_current'] = build_operating_lease_liability_current(all_facts, market_data,
-                                                                                        use_report_date,
-                                                                                        build_ltm_strategy,
-                                                                                        build_instant_strategy).fillna(
-        0)
-    debt['operating_lease_liability_non_current'] = build_operating_lease_liability_non_current(all_facts, market_data,
-                                                                                                use_report_date,
-                                                                                                build_ltm_strategy,
-                                                                                                build_instant_strategy).fillna(
-        0)
-    debt['finance_lease_liability_current'] = build_finance_lease_liability_current(all_facts, market_data,
-                                                                                    use_report_date,
-                                                                                    build_ltm_strategy,
-                                                                                    build_instant_strategy).fillna(0)
-    debt['finance_lease_liability_non_current'] = build_finance_lease_liability_non_current(all_facts, market_data,
-                                                                                            use_report_date,
-                                                                                            build_ltm_strategy,
-                                                                                            build_instant_strategy).fillna(
-        0)
-    debt['short_term_borrowings'] = build_short_term_borrowings(all_facts, market_data, use_report_date,
-                                                                build_ltm_strategy, build_instant_strategy).fillna(0)
-
-    debt['commercial_paper'] = build_commercial_paper(all_facts, market_data, use_report_date,
-                                                      build_ltm_strategy, build_instant_strategy).fillna(0)
-
-    debt['debt'] = debt.apply(get_merged, axis=1)
-
-    result = debt.drop(columns=['long_term_debt_and_capital_lease_obligations_current',
-                                'long_term_debt_and_capital_lease_obligations_non_current',
-                                'long_term_debt_current',
-                                'long_term_debt_non_current',
-                                'capital_lease_obligations_current',
-                                'capital_lease_obligations_non_current',
-                                'operating_lease_liability_current',
-                                'operating_lease_liability_non_current',
-                                'finance_lease_liability_current',
-                                'finance_lease_liability_non_current',
-                                'short_term_borrowings',
-                                'commercial_paper'])
+    result = df_debt.drop(columns=list(metrics_mapping.keys()))
     return result
 
 
@@ -441,39 +313,28 @@ def build_short_term_investments(all_facts, market_data, use_report_date, build_
     return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
 
+def get_annual_generic(fact_name, new_name, *args, **kwargs):
+    return get_annual(*args, fact_name=fact_name, new_name=new_name, **kwargs)
+
+
 def build_cash_and_cash_equivalents_full(all_facts, market_data, use_report_date, build_ltm_strategy,
                                          build_instant_strategy):
-    def build_available_for_sale_securities_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                                    build_instant_strategy):
-        fact_name = 'us-gaap:AvailableForSaleSecuritiesCurrent'
-        new_name = 'available_for_sale_securities_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-    def build_marketable_securities_current(all_facts, market_data, use_report_date, build_ltm_strategy,
-                                            build_instant_strategy):
-        fact_name = 'us-gaap:MarketableSecuritiesCurrent'
-        new_name = 'marketable_securities_current'
-        return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
     cash = build_cash_and_cash_equivalents(all_facts, market_data, use_report_date, build_ltm_strategy,
                                            build_instant_strategy)
     cash['short_term_investments'] = build_short_term_investments(all_facts, market_data, use_report_date,
                                                                   build_ltm_strategy, build_instant_strategy)
-    cash['available_for_sale_securities_current'] = build_available_for_sale_securities_current(all_facts, market_data,
-                                                                                                use_report_date,
-                                                                                                build_ltm_strategy,
-                                                                                                build_instant_strategy)
-    cash['marketable_securities_current'] = build_marketable_securities_current(all_facts, market_data, use_report_date,
-                                                                                build_ltm_strategy,
-                                                                                build_instant_strategy)
-    cash['cash_and_cash_equivalents_full'] = cash['cash_and_cash_equivalents'].fillna(0) \
-                                             + cash['short_term_investments'].fillna(0) \
-                                             + cash['available_for_sale_securities_current'].fillna(0) \
-                                             + cash['marketable_securities_current'].fillna(0)
-    result = cash.drop(columns=['cash_and_cash_equivalents',
-                                'short_term_investments',
-                                'available_for_sale_securities_current',
-                                'marketable_securities_current'])
+
+    fact_to_new_name = {
+        'us-gaap:AvailableForSaleSecuritiesCurrent': 'available_for_sale_securities_current',
+        'us-gaap:MarketableSecuritiesCurrent': 'marketable_securities_current'
+    }
+    for fact_name, new_name in fact_to_new_name.items():
+        cash[new_name] = get_annual(all_facts, market_data, fact_name, new_name, use_report_date,
+                                    build_instant_strategy)
+
+    cash['cash_and_cash_equivalents_full'] = cash.fillna(0).sum(axis=1)
+    result = cash[['cash_and_cash_equivalents_full']]
+
     return result
 
 
@@ -633,110 +494,63 @@ def build_interest_net(all_facts, market_data, use_report_date, build_ltm_strate
 def build_depreciation_and_amortization(all_facts, market_data, use_report_date, build_ltm_strategy,
                                         build_instant_strategy):
     def get_ltm(fact_name, new_name):
-        def get_accumulated_by_segment(facts_in_report):
-            def get_key(fact):
-                period = fact['period']
-                period_str = period
-                if type(period) == list:
-                    r = ''
-                    for p in period:
-                        r += " " + p
-                    period_str = r
-                key = period_str + " " + fact['report_type'] + " " + str(fact['period_length'])
-                return key
+        def get_key(fact):
+            period_str = " ".join(fact['period']) if isinstance(fact['period'], list) else fact['period']
+            return f"{period_str} {fact['report_type']} {fact['period_length']}"
 
-            r = {}
-            for fact in facts_in_report:
-                if fact['segment'] is not None:
-                    key = get_key(fact)
-                    if key in r and fact['value'] is not None:
-                        if r[key]['value'] is not None:
-                            r[key]['value'] += fact['value']
-                        else:
-                            r[key]['value'] = fact['value']
-                    else:
-                        r[key] = fact
-            accumulated = []
-            for key in r:
-                accumulated.append(r[key])
-            return accumulated
+        def accumulate_by_segment(facts):
+            accumulated_data = {}
+            for fact in facts:
+                if fact['segment'] is None:
+                    continue
+                key = get_key(fact)
+                if key in accumulated_data and fact['value'] is not None:
+                    accumulated_data[key]['value'] += fact['value']
+                else:
+                    accumulated_data[key] = fact
+            return list(accumulated_data.values())
 
-        def get_no_segment_fact(facts_in_report):
-            r = []
-            for fact in facts_in_report:
-                if 'segment' not in fact or fact['segment'] is None:
-                    r.append(fact)
-            return r
+        def filter_no_segment(facts):
+            return [fact for fact in facts if fact.get('segment') is None]
 
-        def get_filtered_facts(facts_in_report):
-            no_segment_fact = get_no_segment_fact(facts_in_report)
-            if len(no_segment_fact) != 0:
-                return no_segment_fact
-            return get_accumulated_by_segment(facts_in_report)
+        def get_filtered_facts(facts):
+            no_segment_facts = filter_no_segment(facts)
+            return no_segment_facts if no_segment_facts else accumulate_by_segment(facts)
+
+        def is_valid_fact(fact):
+            return fact['value'] is not None and fact['period_length'] is not None
+
+        def check_fact_type_and_period(fact, report_types, period_range):
+            return is_valid_fact(fact) and fact['report_type'] in report_types and period_range[0] < fact[
+                'period_length'] < period_range[1]
 
         def get_ltm_amortization(fact_name):
-            def is_correct_year(fact):
-                is_correct = fact['value'] is not None and fact['period_length'] is not None
-                if is_correct \
-                        and fact['report_type'] in ['10-K', '10-K/A', '8-K'] \
-                        and (340 < fact['period_length'] < 380):
-                    return True
-                return False
+            # Validation checks
+            is_correct_year = lambda fact: check_fact_type_and_period(fact, ['10-K', '10-K/A', '8-K'], (340, 380))
+            is_correct_first_quarter = lambda fact: check_fact_type_and_period(fact, ['10-Q', '10-Q/A'], (75, 120))
+            is_correct_half_year = lambda fact: check_fact_type_and_period(fact, ['10-Q', '10-Q/A'], (150, 210))
+            is_correct_three_quarter = lambda fact: check_fact_type_and_period(fact, ['10-Q', '10-Q/A'], (240, 310))
 
-            def is_correct_first_quarter(fact):
-                is_correct = fact['value'] is not None and fact['period_length'] is not None
-                if is_correct \
-                        and fact['report_type'] in ['10-Q', '10-Q/A'] \
-                        and (75 < fact['period_length'] < 120):
-                    return True
-                return False
-
-            def is_correct_half_year(fact):
-                is_correct = fact['value'] is not None and fact['period_length'] is not None
-                if is_correct \
-                        and fact['report_type'] in ['10-Q', '10-Q/A'] \
-                        and (150 < fact['period_length'] < 210):
-                    return True
-                return False
-
-            def is_correct_three_quarter(fact):
-                is_correct = fact['value'] is not None and fact['period_length'] is not None
-                if is_correct \
-                        and fact['report_type'] in ['10-Q', '10-Q/A'] \
-                        and (240 < fact['period_length'] < 310):
-                    return True
-                return False
-
-            def get_correct_only_quarter_facts(facts):
-                quarter_facts = []
-                for fact in facts:
-                    is_correct = fact['value'] is not None and fact['period_length'] is not None
-                    if is_correct:
-                        if (340 < fact['period_length'] < 380):
-                            continue
-                        quarter_facts.append(fact)
-                return quarter_facts
+            get_correct_only_quarter_facts = lambda facts: [fact for fact in facts if is_valid_fact(fact) and not (
+                    340 < fact['period_length'] < 380)]
 
             facts = get_filtered(all_facts, [fact_name], count_days_for_remove_old_period=370 * 2)
-
-            group_key = (lambda f: f['report_date']) if use_report_date else (lambda f: f['period'][1])
-
+            group_key = lambda f: f['report_date'] if use_report_date else f['period'][1]
             groups = itertools.groupby(facts, group_key)
 
             result = []
             last_year_value = None
 
             for g in groups:
-
                 facts_in_report = list(g[1])
                 filtered_facts_in_report = get_filtered_facts(facts_in_report)
 
                 report_date = dt.datetime.strptime(g[0], '%Y-%m-%d').date().isoformat()
-                sort_key = lambda f: (f['period'])
-                facts_in_report_sorted = sorted(filtered_facts_in_report, key=sort_key)
+                facts_in_report_sorted = sorted(filtered_facts_in_report, key=lambda f: f['period'])
 
                 current = facts_in_report_sorted[-1]
 
+                # Processing logic
                 if current['report_type'] not in ['10-K', '10-K/A', '8-K', '10-Q', '10-Q/A']:
                     continue
 
@@ -749,8 +563,7 @@ def build_depreciation_and_amortization(all_facts, market_data, use_report_date,
                     continue
 
                 quarter_facts = get_correct_only_quarter_facts(facts_in_report_sorted)
-
-                if len(quarter_facts) == 0:
+                if not quarter_facts:
                     continue
 
                 is_one_q_report = len(quarter_facts) == 1
@@ -761,88 +574,50 @@ def build_depreciation_and_amortization(all_facts, market_data, use_report_date,
 
                 previous = quarter_facts[-2]
 
-                if is_correct_first_quarter(current) and is_correct_first_quarter(previous):
-                    dif = last_year_value + current['value'] - previous['value']
-                    result.append([dif, report_date])
-                    continue
-
-                if is_correct_half_year(current) and is_correct_half_year(previous):
-                    dif = last_year_value + current['value'] - previous['value']
-                    result.append([dif, report_date])
-                    continue
-
-                if is_correct_three_quarter(current) and is_correct_three_quarter(previous):
+                if any([is_correct_first_quarter(current) and is_correct_first_quarter(previous),
+                        is_correct_half_year(current) and is_correct_half_year(previous),
+                        is_correct_three_quarter(current) and is_correct_three_quarter(previous)]):
                     dif = last_year_value + current['value'] - previous['value']
                     result.append([dif, report_date])
                     continue
 
                 result.append([np.nan, report_date])
 
-            r = dict((item[1], item[0]) for item in reversed(result))
-            return r
+            return dict((item[1], item[0]) for item in reversed(result))
 
         def get_df(serias_facts, market_data, name):
             time_coord = market_data.time
             min_date = pd.Timestamp(time_coord.min().values).to_pydatetime().date()
-            series = [
-                pd.Series(serias_facts if len(serias_facts) > 0 else {min_date.isoformat(): np.NaN}, dtype=np.float64,
-                          name=name)]
-            df = pd.concat(series, axis=1)
+
+            if not serias_facts:
+                serias_facts = {min_date.isoformat(): np.NaN}
+
+            df = pd.DataFrame.from_dict(serias_facts, orient='index', columns=[name], dtype=np.float64)
             df.index = df.index.astype(dtype=time_coord.dtype, copy=False)
-            df.name = name
 
             time_coord_df = time_coord.to_pandas()
             time_coord_df.name = 'time'
-            merge = df.join(time_coord_df, how='outer')
-            r = merge.drop(columns=['time'])
-            return r
+            merged_df = df.join(time_coord_df, how='outer').drop(columns=['time'])
+
+            return merged_df
 
         ltm = get_ltm_amortization(fact_name)
         indicator_df = get_df(ltm, market_data, fact_name)
         indicator_df[new_name] = indicator_df[fact_name]
-        r = indicator_df.drop(columns=[fact_name])
-        return r
-
-    def get_depreciation_and_amortization():
-        fact_name = 'us-gaap:DepreciationAndAmortization'
-        new_name = 'DepreciationAndAmortization'
-        return get_ltm(fact_name, new_name)
-
-    def get_depreciation_amortization_accretion_net():
-        fact_name = 'us-gaap:DepreciationAmortizationAndAccretionNet'
-        new_name = 'DepreciationAmortizationAndAccretionNet'
-        return get_ltm(fact_name, new_name)
-
-    def get_depreciation_depletion_amortization():
-        fact_name = 'us-gaap:DepreciationDepletionAndAmortization'
-        new_name = 'DepreciationDepletionAndAmortization'
-        return get_ltm(fact_name, new_name)
-
-    def get_depreciation():
-        fact_name = 'us-gaap:Depreciation'
-        new_name = 'Depreciation'
-        return get_ltm(fact_name, new_name)
-
-    def get_amortization():
-        fact_name = 'us-gaap:AmortizationOfIntangibleAssets'
-        new_name = 'AmortizationOfIntangibleAssets'
-        return get_ltm(fact_name, new_name)
+        return indicator_df.drop(columns=[fact_name])
 
     depreciation_for_restore_global = 0
 
     def get_merged(row):
-        DepreciationAmortizationAndAccretionNet = row['DepreciationAmortizationAndAccretionNet']
-        DepreciationDepletionAndAmortization = row['DepreciationDepletionAndAmortization']
-        DepreciationAndAmortization = row['DepreciationAndAmortization']
+        column_priority = [
+            'DepreciationAmortizationAndAccretionNet',
+            'DepreciationAndAmortization',
+            'DepreciationDepletionAndAmortization',
+        ]
 
-        if not math.isnan(DepreciationAmortizationAndAccretionNet):
-            return DepreciationAmortizationAndAccretionNet
-
-        if not math.isnan(DepreciationAndAmortization):
-            return DepreciationAndAmortization
-
-        if not math.isnan(DepreciationDepletionAndAmortization):
-            return DepreciationDepletionAndAmortization
+        for col in column_priority:
+            if not math.isnan(row[col]):
+                return row[col]
 
         # attempt to restore the value
 
@@ -863,24 +638,28 @@ def build_depreciation_and_amortization(all_facts, market_data, use_report_date,
         if not math.isnan(AmortizationOfIntangibleAssets) and depreciation_for_restore_global > 0:
             return depreciation_for_restore_global + AmortizationOfIntangibleAssets
 
-        return DepreciationAmortizationAndAccretionNet
+        return row['DepreciationAmortizationAndAccretionNet']
 
-    amortization_df = get_depreciation_and_amortization()
-    amortization_df['DepreciationAmortizationAndAccretionNet'] = get_depreciation_amortization_accretion_net()
-    amortization_df['DepreciationDepletionAndAmortization'] = get_depreciation_depletion_amortization()
-    amortization_df['Depreciation'] = get_depreciation()
-    amortization_df['AmortizationOfIntangibleAssets'] = get_amortization()
+    fact_to_new_name_mapping = {
+        'us-gaap:DepreciationAndAmortization': 'DepreciationAndAmortization',
+        'us-gaap:DepreciationAmortizationAndAccretionNet': 'DepreciationAmortizationAndAccretionNet',
+        'us-gaap:DepreciationDepletionAndAmortization': 'DepreciationDepletionAndAmortization',
+        'us-gaap:Depreciation': 'Depreciation',
+        'us-gaap:AmortizationOfIntangibleAssets': 'AmortizationOfIntangibleAssets'
+    }
+
+    amortization_df = pd.DataFrame()
+
+    for fact_name, new_name in fact_to_new_name_mapping.items():
+        amortization_df[new_name] = get_ltm(fact_name, new_name)
+
     amortization_df['merged'] = amortization_df.apply(get_merged, axis=1)
     amortization_df['depreciation_and_amortization'] = amortization_df['merged'].fillna(method="ffill")
-    result1 = amortization_df.drop(columns=['DepreciationAndAmortization',
-                                            'DepreciationAmortizationAndAccretionNet',
-                                            'DepreciationDepletionAndAmortization',
-                                            'merged',
-                                            'Depreciation',
-                                            'AmortizationOfIntangibleAssets',
-                                            ])
 
-    return result1
+    columns_to_drop = list(fact_to_new_name_mapping.values()) + ['merged']
+    result_df = amortization_df.drop(columns=columns_to_drop)
+
+    return result_df
 
 
 def build_ebitda_use_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy,
@@ -1529,14 +1308,9 @@ def load_indicators_for(
         build_ltm_strategy=None,
         build_instant_strategy=None,
 ):
-    if indicator_names is None:
-        indicator_names = get_all_indicator_names()
-
-    if build_ltm_strategy is None:
-        build_ltm_strategy = PeriodIndicatorBuilder.build_ltm_with_remove_gaps
-
-    if build_instant_strategy is None:
-        build_instant_strategy = InstantIndicatorBuilder.build_series_fill_gaps
+    indicator_names = indicator_names or get_all_indicator_names()
+    build_ltm_strategy = build_ltm_strategy or PeriodIndicatorBuilder.build_ltm_with_remove_gaps
+    build_instant_strategy = build_instant_strategy or InstantIndicatorBuilder.build_series_fill_gaps
 
     global_cache.empty()
     fill_strategy = lambda xarr: xarr.ffill('time')
@@ -1549,24 +1323,16 @@ def load_indicators_for(
 
     def get_ciks(market_data):
         asset_names = market_data.asset.to_pandas().to_list()
-
-        assets = get_assets(market_data.time)
-
-        assets_for_load = set()
-        for asset in assets:
-            if asset['id'] in asset_names and asset.get('cik') is not None:
-                assets_for_load.add(asset['cik'])
-
-        return list(assets_for_load)
+        return [asset['cik'] for asset in get_assets(market_data.time) if
+                asset['id'] in asset_names and asset.get('cik')]
 
     def get_us_gaap_facts_for_load(indicators):
-        facts = []
-        for name in indicators:
-            if name in global_indicators:
-                facts = facts + global_indicators[name]['facts']
-        facts_unique = set(facts)
-        facts_unique = list(facts_unique)
-        return facts_unique
+        return list(set([fact for name in indicators if name in global_indicators for fact in
+                         global_indicators[name]['facts']]))
+
+    def get_names(market_data):
+        return {asset['cik']: asset['id'] for asset in get_assets(market_data.time) if
+                asset['id'] in market_data.asset.to_pandas().to_list() and asset.get('cik')}
 
     def load_all_facts(ciks, us_gaap_facts, min_date, max_date):
         for cik_reports in load_facts(ciks, us_gaap_facts, min_date=min_date, max_date=max_date, skip_segment=False,
@@ -1577,53 +1343,41 @@ def load_indicators_for(
 
     def build_indicators(all_facts, market_data, indicator_names, all_names):
         indicators_xr = []
-        all_indicators_for_asset_df = None
         use_report_date = True
+
         for cik_reports in all_facts:
             asset_name = all_names[cik_reports[0]]
+            all_indicators_for_asset_df = None
+
             for indicator in indicator_names:
                 if indicator in global_indicators:
+                    indicator_data = global_indicators[indicator]['build'](cik_reports[1],
+                                                                           market_data.sel(
+                                                                               asset=[asset_name]),
+                                                                           use_report_date,
+                                                                           build_ltm_strategy,
+                                                                           build_instant_strategy)
+
                     if all_indicators_for_asset_df is None:
-                        all_indicators_for_asset_df = global_indicators[indicator]['build'](cik_reports[1],
-                                                                                            market_data.sel(
-                                                                                                asset=[asset_name]),
-                                                                                            use_report_date,
-                                                                                            build_ltm_strategy,
-                                                                                            build_instant_strategy)
+                        all_indicators_for_asset_df = indicator_data
                     else:
-                        all_indicators_for_asset_df[indicator] = global_indicators[indicator]['build'](cik_reports[1],
-                                                                                                       market_data.sel(
-                                                                                                           asset=[
-                                                                                                               asset_name]),
-                                                                                                       use_report_date,
-                                                                                                       build_ltm_strategy,
-                                                                                                       build_instant_strategy)
+                        all_indicators_for_asset_df[indicator] = indicator_data
+
             if all_indicators_for_asset_df is None:
                 continue
 
             df = all_indicators_for_asset_df.unstack().to_xarray().rename({'level_0': 'field', 'level_1': 'time'})
             df.name = asset_name
             indicators_xr.append(df)
-            all_indicators_for_asset_df = None
             global_cache.empty()
 
         return indicators_xr
 
-    def get_names(market_data):
-        asset_names = market_data.asset.to_pandas().to_list()
-
-        assets = get_assets(market_data.time)
-
-        assets_for_load = {}
-        for asset in assets:
-            if asset['id'] in asset_names and asset.get('cik') is not None:
-                assets_for_load[asset['cik']] = asset['id']
-
-        return assets_for_load
-
     time_coord = stocks_market_data.time
-    min_date = pd.Timestamp(time_coord.min().values).to_pydatetime().date() - parse_tail(start_date_offset)
-    max_date = pd.Timestamp(time_coord.max().values).to_pydatetime().date()
+    min_date = (np.datetime64(time_coord.min().values) - np.timedelta64(start_date_offset.days, 'D')).astype(
+        datetime.date)
+    max_date = np.datetime64(time_coord.max().values).astype(datetime.date)
+
     ciks = get_ciks(stocks_market_data)
     facts_names = get_us_gaap_facts_for_load(indicator_names)
     all_facts = load_all_facts(ciks, facts_names, min_date, max_date)
@@ -1634,9 +1388,10 @@ def load_indicators_for(
     if len(builded_indicators) is 0:
         return None  # TODO
 
-    idc_arr = xr.concat(builded_indicators, pd.Index([d.name for d in builded_indicators], name='asset'))
+    idc_arr = xr.concat(builded_indicators,
+                        xr.DataArray([d.name for d in builded_indicators], dims=['asset'], name='asset'))
 
-    idc_arr = xr.align(idc_arr, time_coord, join='outer')[0]
+    idc_arr, _ = xr.align(idc_arr, time_coord, join='outer')
     idc_arr = idc_arr.sel(time=np.sort(idc_arr.time.values))
     idc_arr = fill_strategy(idc_arr)
     idc_arr = idc_arr.sel(time=time_coord)
