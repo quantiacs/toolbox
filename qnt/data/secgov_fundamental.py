@@ -6,8 +6,83 @@ import numpy as np
 
 from qnt.data.common import *
 from qnt.data.secgov import load_facts
-from qnt.data.secgov_indicators import InstantIndicatorBuilder, PeriodIndicatorBuilder
+from qnt.data.secgov_indicators import InstantIndicatorBuilder, PeriodIndicatorBuilder, IndicatorUtils
 from qnt.data.stocks import load_list
+
+
+def load_indicators_for(stocks_market_data,
+                        indicator_names=None,
+                        build_ltm_strategy=None,
+                        build_instant_strategy=None):
+    def load_all_facts(ciks, us_gaap_facts, min_date, max_date):
+        columns = ['cik', 'report_id', 'report_type', 'report_date', 'fact_name', 'period', 'period_length', 'segment']
+        for cik_reports in load_facts(ciks, us_gaap_facts, min_date=min_date, max_date=max_date, skip_segment=False,
+                                      columns=columns, group_by_cik=True):
+            yield cik_reports
+
+    indicator_names = indicator_names or get_all_indicator_names()
+    build_ltm_strategy = build_ltm_strategy or IndicatorUtils.build_ltm_with_remove_gaps
+    build_instant_strategy = build_instant_strategy or IndicatorUtils.build_series_fill_gaps
+
+    fill_strategy = lambda xarr: xarr.ffill('time')
+    start_date_offset = datetime.timedelta(days=365 * 2)
+
+    time_coord = stocks_market_data.time
+    min_date = (np.datetime64(time_coord.min().values) - np.timedelta64(start_date_offset.days, 'D')).astype(
+        datetime.date)
+    max_date = np.datetime64(time_coord.max().values).astype(datetime.date)
+
+    assets = load_list(min_date="2000-12-01", max_date=time_coord.max().values)
+    asset_names = stocks_market_data.asset.to_pandas().to_list()
+    ciks = [asset['cik'] for asset in assets if asset['id'] in asset_names and asset.get('cik')]
+
+    facts_names = [fact for name in indicator_names if name in global_indicators for fact in
+                   global_indicators[name]['facts']]
+    facts_names = list(set(facts_names))
+
+    all_facts = load_all_facts(ciks, facts_names, min_date, max_date)
+    all_names = {asset['cik']: asset['id'] for asset in assets if asset['id'] in asset_names and asset.get('cik')}
+
+    builded_indicators = []
+
+    for cik_reports in all_facts:
+        asset_name = all_names.get(cik_reports[0], None)
+        if asset_name is None:
+            continue
+
+        all_indicators_for_asset_df = None
+
+        for indicator in indicator_names:
+            if indicator not in global_indicators:
+                continue
+
+            indicator_data = global_indicators[indicator]['build'](cik_reports[1],
+                                                                   stocks_market_data.sel(asset=[asset_name]), True,
+                                                                   build_ltm_strategy, build_instant_strategy)
+
+            if all_indicators_for_asset_df is None:
+                all_indicators_for_asset_df = indicator_data
+            else:
+                all_indicators_for_asset_df[indicator] = indicator_data
+
+        if all_indicators_for_asset_df is not None:
+            df = all_indicators_for_asset_df.unstack().to_xarray().rename({'level_0': 'field', 'level_1': 'time'})
+            df.name = asset_name
+            builded_indicators.append(df)
+
+    if not builded_indicators:
+        return None  # TODO
+
+    idc_arr = xr.concat(builded_indicators,
+                        xr.DataArray([d.name for d in builded_indicators], dims=['asset'], name='asset'))
+    idc_arr, _ = xr.align(idc_arr, time_coord, join='outer')
+    idc_arr = fill_strategy(idc_arr.sel(time=np.sort(idc_arr.time.values)))
+    idc_arr = idc_arr.sel(time=time_coord)
+
+    idc_arr.name = "secgov_indicators"
+    idc_arr = idc_arr.transpose('time', 'field', 'asset')
+
+    return idc_arr
 
 
 class CacheHelper:
@@ -28,8 +103,7 @@ class CacheHelper:
 
     @staticmethod
     def get_key_for(all_facts, market_data, fact_name, new_name, use_report_date):
-        close_price_df = market_data.sel(field='close').to_pandas()
-        name_ticker = close_price_df.columns[0]
+        name_ticker = market_data.asset.values[0]
         return f"{name_ticker}_{fact_name}_{new_name}_{str(use_report_date)}"
 
 
@@ -133,12 +207,6 @@ def build_shares(all_facts, market_data, use_report_date, build_ltm_strategy, bu
     # https://www.sec.gov/cgi-bin/viewer?action=view&cik=320193&accession_number=0001628280-16-020309&xbrl_type=v#
     fact_name = 'dei:EntityCommonStockSharesOutstanding'
     new_name = 'shares'
-    return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
-
-
-def build_cash_and_cash_equivalent(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
-    fact_name = 'us-gaap:CashAndCashEquivalentsAtCarryingValue'
-    new_name = 'cash_and_cash_equivalent'
     return get_annual(all_facts, market_data, fact_name, new_name, use_report_date, build_instant_strategy)
 
 
@@ -417,38 +485,6 @@ def build_liabilities(all_facts, market_data, use_report_date, build_ltm_strateg
     liabilities['liabilities'] = liabilities.apply(get_merged, axis=1)
     result = liabilities.drop(columns=['equity', 'total'])
     return result
-
-    # alternative way
-
-    # 'liabilities': {'facts': ['us-gaap:Liabilities', 'us-gaap:LiabilitiesCurrent', 'us-gaap:LongTermDebtNoncurrent',
-    #                           'us-gaap:CapitalLeaseObligationsNoncurrent',
-    #                           'us-gaap:DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent'],
-    #                 'build': build_liabilities},
-
-    # Liabilities_df = get_simple_indicator(all_facts, market_data, 'us-gaap:Liabilities', use_report_date)
-    # LiabilitiesCurrent_df = get_simple_indicator(all_facts, market_data, 'us-gaap:LiabilitiesCurrent', use_report_date)
-    # LongTermDebtNoncurrent_df = get_simple_indicator(all_facts, market_data, 'us-gaap:LongTermDebtNoncurrent',
-    #                                                  use_report_date)
-    # CapitalLeaseObligationsNoncurrent_df = get_simple_indicator(all_facts, market_data,
-    #                                                             'us-gaap:CapitalLeaseObligationsNoncurrent',
-    #                                                             use_report_date)
-    # DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent_df = get_simple_indicator(all_facts, market_data,
-    #                                                                            'us-gaap:DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent',
-    #                                                                            use_report_date)
-    # l_len = len(Liabilities_df['us-gaap:Liabilities'])
-    # total_sum = Liabilities_df['us-gaap:Liabilities'].isnull().sum()
-    # result = Liabilities_df.copy()
-    # if total_sum == l_len:
-    #     Current = LiabilitiesCurrent_df['us-gaap:LiabilitiesCurrent']
-    #     LongTermDebt = LongTermDebtNoncurrent_df['us-gaap:LongTermDebtNoncurrent']
-    #     CapitalLeaseObligations = CapitalLeaseObligationsNoncurrent_df['us-gaap:CapitalLeaseObligationsNoncurrent']
-    #     DeferredIncomeTaxesAndOtherLiabilities = DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent_df[
-    #         'us-gaap:DeferredIncomeTaxesAndOtherLiabilitiesNoncurrent']
-    #     result[
-    #         'liabilities'] = Current + LongTermDebt + CapitalLeaseObligations + DeferredIncomeTaxesAndOtherLiabilities
-    #     result = result.drop(columns=['us-gaap:Liabilities'])
-
-    # return result
 
 
 def build_income_before_taxes(all_facts, market_data, use_report_date, build_ltm_strategy, build_instant_strategy):
@@ -788,29 +824,6 @@ def build_ebitda_use_operating_income(all_facts, market_data, use_report_date, b
                                        onoperating_income_expense + \
                                        merged_interest_expense
 
-    # def for_test_ebitda(depreciation_and_amortization_df, income_interest_df, losses_on_extinguishment_of_debt_df,
-    #                     onoperating_income_expense_df, operating_income_df, r, interest_expense_df,
-    #                     merged_interest_expense_df):
-    #     date = '2017-03-01'
-    #     date = '2021-01-28'
-    #     operating_income = operating_income_df.loc[date].max() / 1000000
-    #     depreciation_and_amortization = depreciation_and_amortization_df.loc[date].max() / 1000000
-    #     income_interest = income_interest_df.loc[date].max() / 1000000
-    #     onoperating_income_expense = onoperating_income_expense_df.loc[date].max() / 1000000
-    #     losses_on_extinguishment_of_debt = losses_on_extinguishment_of_debt_df.loc[date].max() / 1000000
-    #     interest_expense = interest_expense_df.loc[date].max() / 1000000
-    #     merged_interest_expense = merged_interest_expense_df.loc[date].max() / 1000000
-    #     operating_income_plys_amortization = operating_income + depreciation_and_amortization
-    #     income_interest_onoperating_income_expense = income_interest + onoperating_income_expense
-    #     # income_before_taxes = income_before_taxes_df.loc[date].max() / 1000000
-    #     sum_interest = income_interest - interest_expense
-    #     sum = r['ebitda_use_operating_income'].loc[date].max() / 1000000
-    #     return
-    #
-    # for_test_ebitda(depreciation_and_amortization_df, income_interest_df, losses_on_extinguishment_of_debt_df,
-    #                 onoperating_income_expense_df, operating_income_df, r, interest_expense_df, merged_interest_expense,
-    #                 )
-
     r = r.drop(columns=['operating_income'])
     return r
 
@@ -912,6 +925,23 @@ def build_roe(all_facts, market_data, use_report_date, build_ltm_strategy, build
     r = net_income.drop(columns=['net_income', 'equity'])
     r.replace([np.inf, -np.inf], np.nan, inplace=True)
     return r
+
+
+def get_all_indicator_names():
+    return list(global_indicators.keys())
+
+
+def get_complex_indicator_names():
+    return ['ebitda_simple',
+            'ev',
+            'ev_divide_by_ebitda',
+            'liabilities_divide_by_ebitda',
+            'net_debt_divide_by_ebitda',
+            'p_divide_by_e',
+            'p_divide_by_bv',
+            'p_divide_by_s',
+            'ev_divide_by_s',
+            'roe']
 
 
 global_indicators = {
@@ -1283,119 +1313,3 @@ global_indicators = {
     ],
         'build': build_roe},
 }
-
-
-def get_all_indicator_names():
-    return list(global_indicators.keys())
-
-
-def get_complex_indicator_names():
-    return ['ebitda_simple',
-            'ev',
-            'ev_divide_by_ebitda',
-            'liabilities_divide_by_ebitda',
-            'net_debt_divide_by_ebitda',
-            'p_divide_by_e',
-            'p_divide_by_bv',
-            'p_divide_by_s',
-            'ev_divide_by_s',
-            'roe']
-
-
-def load_indicators_for(
-        stocks_market_data,
-        indicator_names=None,
-        build_ltm_strategy=None,
-        build_instant_strategy=None,
-):
-    indicator_names = indicator_names or get_all_indicator_names()
-    build_ltm_strategy = build_ltm_strategy or PeriodIndicatorBuilder.build_ltm_with_remove_gaps
-    build_instant_strategy = build_instant_strategy or InstantIndicatorBuilder.build_series_fill_gaps
-
-    global_cache.empty()
-    fill_strategy = lambda xarr: xarr.ffill('time')
-    start_date_offset = datetime.timedelta(days=365 * 2)
-
-    def get_assets(time_coord):
-        # assets = load_list(min_date=time_coord.min().values, max_date=time_coord.max().values)
-        assets = load_list(min_date="2000-12-01", max_date=time_coord.max().values)
-        return assets
-
-    def get_ciks(market_data):
-        asset_names = market_data.asset.to_pandas().to_list()
-        return [asset['cik'] for asset in get_assets(market_data.time) if
-                asset['id'] in asset_names and asset.get('cik')]
-
-    def get_us_gaap_facts_for_load(indicators):
-        return list(set([fact for name in indicators if name in global_indicators for fact in
-                         global_indicators[name]['facts']]))
-
-    def get_names(market_data):
-        return {asset['cik']: asset['id'] for asset in get_assets(market_data.time) if
-                asset['id'] in market_data.asset.to_pandas().to_list() and asset.get('cik')}
-
-    def load_all_facts(ciks, us_gaap_facts, min_date, max_date):
-        for cik_reports in load_facts(ciks, us_gaap_facts, min_date=min_date, max_date=max_date, skip_segment=False,
-                                      columns=['cik', 'report_id', 'report_type', 'report_date', 'fact_name', 'period',
-                                               'period_length', 'segment'],
-                                      group_by_cik=True):
-            yield cik_reports
-
-    def build_indicators(all_facts, market_data, indicator_names, all_names):
-        indicators_xr = []
-        use_report_date = True
-
-        for cik_reports in all_facts:
-            asset_name = all_names[cik_reports[0]]
-            all_indicators_for_asset_df = None
-
-            for indicator in indicator_names:
-                if indicator in global_indicators:
-                    indicator_data = global_indicators[indicator]['build'](cik_reports[1],
-                                                                           market_data.sel(
-                                                                               asset=[asset_name]),
-                                                                           use_report_date,
-                                                                           build_ltm_strategy,
-                                                                           build_instant_strategy)
-
-                    if all_indicators_for_asset_df is None:
-                        all_indicators_for_asset_df = indicator_data
-                    else:
-                        all_indicators_for_asset_df[indicator] = indicator_data
-
-            if all_indicators_for_asset_df is None:
-                continue
-
-            df = all_indicators_for_asset_df.unstack().to_xarray().rename({'level_0': 'field', 'level_1': 'time'})
-            df.name = asset_name
-            indicators_xr.append(df)
-            global_cache.empty()
-
-        return indicators_xr
-
-    time_coord = stocks_market_data.time
-    min_date = (np.datetime64(time_coord.min().values) - np.timedelta64(start_date_offset.days, 'D')).astype(
-        datetime.date)
-    max_date = np.datetime64(time_coord.max().values).astype(datetime.date)
-
-    ciks = get_ciks(stocks_market_data)
-    facts_names = get_us_gaap_facts_for_load(indicator_names)
-    all_facts = load_all_facts(ciks, facts_names, min_date, max_date)
-
-    all_names = get_names(stocks_market_data)
-    builded_indicators = build_indicators(all_facts, stocks_market_data, indicator_names, all_names)
-
-    if len(builded_indicators) is 0:
-        return None  # TODO
-
-    idc_arr = xr.concat(builded_indicators,
-                        xr.DataArray([d.name for d in builded_indicators], dims=['asset'], name='asset'))
-
-    idc_arr, _ = xr.align(idc_arr, time_coord, join='outer')
-    idc_arr = idc_arr.sel(time=np.sort(idc_arr.time.values))
-    idc_arr = fill_strategy(idc_arr)
-    idc_arr = idc_arr.sel(time=time_coord)
-
-    idc_arr.name = "secgov_indicators"
-    idc_arr = idc_arr.transpose('time', 'field', 'asset')
-    return idc_arr
