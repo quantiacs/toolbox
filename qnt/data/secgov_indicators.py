@@ -89,6 +89,8 @@ class IndicatorUtils:
     def _accumulate_by_key(facts_in_report):
         accumulated_dict = {}
         for fact in facts_in_report:
+            if fact.get('value', 0) is None:
+                continue
             key = IndicatorUtils._key_for_fact(fact)
             if key in accumulated_dict:
                 existing_value = accumulated_dict[key].get('value', 0)
@@ -168,6 +170,101 @@ class IndicatorUtils:
         return sorted(IndicatorUtils._fill_series_gaps(merged_data, IndicatorUtils.BORDER_MAX_GAP_DAYS),
                       key=lambda x: x[1])
 
+    @staticmethod
+    def get_filtered(all_facts, facts_names, count_days_for_remove_old_period=370 * 2):
+        matching_facts = [fact for fact in all_facts if fact['fact_name'] in facts_names]
+        valid_facts = []
+        for fact in matching_facts:
+            report_date = fact.get('report_date')
+            period = fact.get('period')
+
+            if not isinstance(period, (str, list)):
+                continue
+
+            period_end = period if isinstance(period, str) else period[1]
+            report_date_time = dt.datetime.strptime(report_date, '%Y-%m-%d')
+            period_end_time = dt.datetime.strptime(period_end, '%Y-%m-%d')
+
+            if (report_date_time - period_end_time).days < count_days_for_remove_old_period:
+                valid_facts.append(fact)
+        return valid_facts
+
+    @staticmethod
+    def get_ltm_amortization(fact_name, all_facts):
+        use_report_date = True
+
+        def is_valid_fact(fact):
+            return fact['value'] is not None and fact['period_length'] is not None
+
+        def check_fact_type_and_period(fact, report_types, period_range):
+            return is_valid_fact(fact) and fact['report_type'] in report_types and period_range[0] < fact[
+                'period_length'] < period_range[1]
+
+        def get_ltm_amortization(fact_name):
+            # Validation checks
+            is_correct_year = lambda fact: check_fact_type_and_period(fact, ['10-K', '10-K/A', '8-K'], (340, 380))
+            is_correct_first_quarter = lambda fact: check_fact_type_and_period(fact, ['10-Q', '10-Q/A'], (75, 120))
+            is_correct_half_year = lambda fact: check_fact_type_and_period(fact, ['10-Q', '10-Q/A'], (150, 210))
+            is_correct_three_quarter = lambda fact: check_fact_type_and_period(fact, ['10-Q', '10-Q/A'], (240, 310))
+
+            get_correct_only_quarter_facts = lambda facts: [fact for fact in facts if is_valid_fact(fact) and not (
+                    340 < fact['period_length'] < 380)]
+
+            facts = IndicatorUtils.get_filtered(all_facts, [fact_name], count_days_for_remove_old_period=370 * 2)
+            group_key = lambda f: f['report_date'] if use_report_date else f['period'][1]
+            groups = itertools.groupby(facts, group_key)
+
+            result = []
+            last_year_value = None
+
+            for g in groups:
+                facts_in_report = list(g[1])
+                filtered_facts_in_report = IndicatorUtils.get_restored_by_segment(facts_in_report)
+
+                report_date = dt.datetime.strptime(g[0], '%Y-%m-%d').date().isoformat()
+                facts_in_report_sorted = sorted(filtered_facts_in_report, key=lambda f: f['period'])
+
+                current = facts_in_report_sorted[-1]
+
+                # Processing logic
+                if current['report_type'] not in ['10-K', '10-K/A', '8-K', '10-Q', '10-Q/A']:
+                    continue
+
+                if is_correct_year(current):
+                    last_year_value = current['value']
+                    result.append([last_year_value, report_date])
+                    continue
+
+                if last_year_value is None:
+                    continue
+
+                quarter_facts = get_correct_only_quarter_facts(facts_in_report_sorted)
+                if not quarter_facts:
+                    continue
+
+                is_one_q_report = len(quarter_facts) == 1
+                if is_one_q_report:
+                    last_year_value = 0
+                    result.append([current['value'], report_date])
+                    continue
+
+                previous = quarter_facts[-2]
+
+                if any([is_correct_first_quarter(current) and is_correct_first_quarter(previous),
+                        is_correct_half_year(current) and is_correct_half_year(previous),
+                        is_correct_three_quarter(current) and is_correct_three_quarter(previous)]):
+                    dif = last_year_value + current['value'] - previous['value']
+                    result.append([dif, report_date])
+                    continue
+
+                result.append([np.nan, report_date])
+
+            return dict((item[1], item[0]) for item in reversed(result))
+
+        ltm = get_ltm_amortization(fact_name)
+
+        return ltm
+
 
 class IndicatorBuilder:
     def __init__(self, alias, facts, use_report_date):
@@ -238,7 +335,7 @@ class PeriodIndicatorBuilder(IndicatorBuilder):
         return {item[1].date().isoformat(): item[0] for item in reversed(result)}
 
     def _get_annual_dict(self, fact_data):
-        annual = [f for f in fact_data if 340 < f['period_length'] < 380]
+        annual = [f for f in fact_data if f['period_length'] is not None and 340 < f['period_length'] < 380]
         groups = itertools.groupby(annual, self.group_key)
         return {g[0]: next(g[1])['value'] for g in groups}
 

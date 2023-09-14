@@ -3,7 +3,7 @@ import pandas as pd
 
 import json
 import os
-import pickle
+import pickle5 as pickle
 
 os.environ['API_KEY'] = "default"
 
@@ -356,7 +356,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
-        self.assertEqual(11404.127117677155, indicator.loc['2017-03-01 '].max() / 1000000)  # did not check
+        self.assertAlmostEqual(11404.127117677155, indicator.loc['2017-03-01 '].max() / 1000000)  # did not check
 
     def test_net_debt_divide_by_ebitda_wmt(self):
         name_indicator = 'net_debt_divide_by_ebitda'
@@ -389,8 +389,8 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator)
 
-        self.assertEqual(257690.2944143203, indicator.loc['2017-03-31 '].max() / 1000000)
-        self.assertEqual(437460.39974495, indicator.loc['2021-06-04'].max() / 1000000)
+        self.assertAlmostEqual(257690.2944143203, indicator.loc['2017-03-31 '].max() / 1000000)
+        self.assertAlmostEqual(437460.39974495, indicator.loc['2021-06-04'].max() / 1000000)
 
     def test_ev_divide_by_ebitda_wmt(self):
         name_indicator = 'ev_divide_by_ebitda'
@@ -399,8 +399,8 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
-        self.assertEqual(7.845886445448797, indicator.loc['2017-03-31 '].max())
-        self.assertEqual(12.40846404041838, indicator.loc['2021-06-04'].max())
+        self.assertAlmostEqual(7.845886445448797, indicator.loc['2017-03-31 '].max())
+        self.assertAlmostEqual(12.40846404041838, indicator.loc['2021-06-04'].max())
 
     def test_p_divide_by_bv_wmt(self):
         name_indicator = 'p_divide_by_bv'
@@ -409,7 +409,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
-        self.assertEqual(2.714587377094683, indicator.loc['2017-03-31 '].max())
+        self.assertAlmostEqual(2.714587377094683, indicator.loc['2017-03-31 '].max())
 
     def test_p_divide_by_s_wmt(self):
         name_indicator = 'p_divide_by_s'
@@ -418,7 +418,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
-        self.assertEqual(0.4499515190478176, indicator.loc['2017-03-31 '].max())
+        self.assertAlmostEqual(0.4499515190478176, indicator.loc['2017-03-31 '].max())
 
     def test_ev_divide_by_s_wmt(self):
         name_indicator = 'ev_divide_by_s'
@@ -427,7 +427,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
-        self.assertEqual(0.5303655367026369, indicator.loc['2017-03-31 '].max())
+        self.assertAlmostEqual(0.5303655367026369, indicator.loc['2017-03-31 '].max())
 
     def test_roe_wmt(self):
         name_indicator = 'roe'
@@ -1114,7 +1114,10 @@ class TestBaseFundamentalData(unittest.TestCase):
             , all_indicators)
 
         self.assertEqual(
-            ['ebitda_simple',
+            ['market_capitalization',
+             'ebitda_use_income_before_taxes',
+             'ebitda_use_operating_income',
+             'ebitda_simple',
              'ev',
              'ev_divide_by_ebitda',
              'liabilities_divide_by_ebitda',
@@ -1125,6 +1128,50 @@ class TestBaseFundamentalData(unittest.TestCase):
              'ev_divide_by_s',
              'roe']
             , fundamental.get_complex_indicator_names())
+
+        self.assertEqual(
+            ['total_revenue',
+             'liabilities',
+             'assets',
+             'equity',
+             'net_income',
+             'short_term_investments',
+             'cash_and_cash_equivalents',
+             'cash_and_cash_equivalents_full',
+             'operating_income',
+             'income_before_taxes',
+             'income_before_income_taxes',
+             'depreciation_and_amortization',
+             'interest_net',
+             'income_interest',
+             'interest_expense',
+             'interest_expense_debt',
+             'interest_expense_capital_lease',
+             'interest_income_expense_net',
+             'losses_on_extinguishment_of_debt',
+             'nonoperating_income_expense',
+             'other_nonoperating_income_expense',
+             'debt',
+             'net_debt',
+             'eps',
+             'shares', ]
+            , fundamental.get_standard_indicator_names())
+
+        self.assertEqual(
+            ['liabilities',
+             'assets',
+             'equity',
+             'short_term_investments',
+             'cash_and_cash_equivalents',
+             'cash_and_cash_equivalents_full',
+             'losses_on_extinguishment_of_debt',
+             'debt',
+             'net_debt',
+             'shares',
+             'market_capitalization',
+             'ev',
+             'p_divide_by_bv']
+            , fundamental.get_annual_indicator_names())
 
     # def test_ebitda_use_income_before_taxes(self):
     #     name_indicator = 'ebitda_use_income_before_taxes'
@@ -1159,8 +1206,8 @@ def print_normed(df_, ticker='NYSE:WMT'):
 
 def get_data_wmt():
     import pandas as pd
-    import qnt.data    as qndata
-    import datetime    as dt
+    import qnt.data as qndata
+    import datetime as dt
 
     import qnt.data.secgov_indicators
 
@@ -1170,7 +1217,7 @@ def get_data_wmt():
         filler = data.sel(asset=assets)
         return filler
 
-    import qnt.data    as qndata
+    import qnt.data as qndata
     assets = qndata.load_assets(min_date="2000-01-01", max_date="2021-06-25")
 
     WMT = {}
@@ -1201,10 +1248,10 @@ def get_data_wmt():
     return NYSE_WMT
 
 
-def test_all():
+def test_all1():
     import pandas as pd
-    import qnt.data    as qndata
-    import datetime    as dt
+    import qnt.data as qndata
+    import datetime as dt
 
     import qnt.data.secgov_indicators
 
@@ -1216,10 +1263,10 @@ def test_all():
         if a['id'] == 'NYSE:WMT':
             WMT = a
 
-    data = qndata.load_data(min_date="2010-01-01", max_date="2021-07-28",
-                            dims=("time", "field", "asset"),
-                            assets=['NYSE:WMT'],
-                            forward_order=True)
+    data = qndata.stocks.load_ndx_data(min_date="2010-01-01", max_date="2021-07-28",
+                                       dims=("time", "field", "asset"),
+                                       assets=['NYSE:WMT'],
+                                       forward_order=True)
 
     data_lbls = ['assets', 'liabilities', 'operating_expense', 'ivestment_short_term', 'shares', 'invested_capital',
                  'assets_curr', 'equity', 'liabilities_curr', 'debt_lt', 'debt_st', 'goodwill', 'inventory', 'ppent',
@@ -1239,8 +1286,21 @@ def test_all():
     return fun_data1
 
 
+def test_all2():
+    import qnt.data as qndata
+    import qnt.data.secgov_fundamental as fundamental
+
+    market_data = qndata.stocks.load_ndx_data(min_date="2010-01-01", max_date="2021-09-28",
+                                              dims=("time", "field", "asset"),
+                                              forward_order=True)
+
+    indicators = fundamental.load_indicators_for(market_data)
+
+    return indicators
+
+
 def get_data_new_for(asset_names, indicators_names):
-    import qnt.data    as qndata
+    import qnt.data as qndata
     import qnt.data.secgov_fundamental as fundamental
 
     import pickle
@@ -1250,10 +1310,15 @@ def get_data_new_for(asset_names, indicators_names):
     #
     # market_data = market_data.sel(asset=asset_names)
 
-    market_data = qndata.load_data(min_date="2010-01-01", max_date="2021-09-28",
-                                   dims=("time", "field", "asset"),
-                                   assets=asset_names,
-                                   forward_order=True)
+    # market_data = qndata.load_data(min_date="2010-01-01", max_date="2021-09-28",
+    #                                dims=("time", "field", "asset"),
+    #                                assets=asset_names,
+    #                                forward_order=True)
+
+    market_data = qndata.stocks.load_ndx_data(min_date="2010-01-01", max_date="2021-09-28",
+                                              dims=("time", "field", "asset"),
+                                              assets=asset_names,
+                                              forward_order=True)
 
     indicators = fundamental.load_indicators_for(market_data, indicators_names)
 
