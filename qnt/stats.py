@@ -208,6 +208,8 @@ def calc_relative_return_np(WEIGHT, UNLOCKED, OPEN, CLOSE, SLIPPAGE, DIVS, ROLL,
             equity_after_buy[t] -= np.nansum(R)
 
         equity_tonight[t] = equity_after_buy[t] + np.nansum((CLOSE[t] - OPEN[t]) * N[t])
+        # Update the number of shares for locked assets
+        N[t][locked] = 0
 
     E = equity_tonight
     Ep = np.roll(E, 1)
