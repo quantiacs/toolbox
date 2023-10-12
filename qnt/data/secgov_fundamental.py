@@ -8,25 +8,28 @@ from qnt.data.stocks import load_list, load_ndx_list
 
 def load_indicators_for(stocks_market_data: xr.DataArray,
                         indicator_names: List[str] = None,
-                        time_period: str = 'ltm') -> xr.DataArray:
+                        time_period: str = 'ltm',
+                        indicators_builders: dict = None
+                        ) -> xr.DataArray:
     def fill_missing_time(data: xr.DataArray, fact_names: List[str]):
         for fact_name in fact_names:
-            if fact_name not in global_custom_ltm:
+            if fact_name not in GLOBAL_CUSTOM_LTM_US_GAAPS:
                 ds_sel = data.sel(field=fact_name)
                 data.loc[{"field": fact_name}] = ds_sel.ffill(dim="time")
 
     def build_indicators(data: xr.DataArray, names: List[str]) -> xr.DataArray:
         indicators_ = initialize_fundamental_data(data, names)
         for name in names:
-            indicators_.loc[{'field': name}] = global_indicators[name]['build'](data)
+            indicators_.loc[{'field': name}] = indicators_builders[name]['build'](data)
         return indicators_
 
     indicator_names = indicator_names or get_all_indicator_names()
+    indicators_builders = indicators_builders or GLOBAL_INDICATORS
 
-    fundamental_data = get_computed_facts(stocks_market_data, indicator_names, time_period)
+    fundamental_data = get_computed_facts(stocks_market_data, indicator_names, time_period, indicators_builders)
     fill_missing_time(fundamental_data, fundamental_data.field.values)
     merged_data = xr.concat([fundamental_data, stocks_market_data.sel(field='close')], dim="field")
-    valid_names = [indicator for indicator in indicator_names if indicator in global_indicators]
+    valid_names = [indicator for indicator in indicator_names if indicator in indicators_builders]
 
     indicators = build_indicators(merged_data, valid_names).ffill('time')
     indicators.name = "secgov_indicators"
@@ -37,6 +40,7 @@ def load_indicators_for(stocks_market_data: xr.DataArray,
 def get_computed_facts(stocks_market_data: xr.DataArray,
                        indicator_names: Union[List[str], None] = None,
                        time_period: str = 'ltm',
+                       indicators_builders: dict = None,
                        build_period_strategy: Callable = IndicatorUtils.build_ltm_with_remove_gaps,
                        build_instant_strategy: Callable = IndicatorUtils.build_series_fill_gaps) -> xr.DataArray:
     def load_all_facts(ciks, us_gaap_facts, min_date, max_date):
@@ -59,10 +63,10 @@ def get_computed_facts(stocks_market_data: xr.DataArray,
                 return series_data
 
             facts = IndicatorUtils.get_filtered(reports, [fact_name])
-            if fact_name in annual_indicator:
+            if fact_name in GLOBAL_ANNUAL_US_GAAPS:
                 return _compute_annual(fact_name, facts)
-            if fact_name in global_custom_ltm:
-                return global_custom_ltm[fact_name](fact_name, reports)
+            if fact_name in GLOBAL_CUSTOM_LTM_US_GAAPS:
+                return GLOBAL_CUSTOM_LTM_US_GAAPS[fact_name](fact_name, reports)
             return _compute_ltm(fact_name, facts)
 
         fundamental_data_ = fundamental_data.copy()
@@ -88,8 +92,8 @@ def get_computed_facts(stocks_market_data: xr.DataArray,
     if time_period not in ['ltm', 'qf', 'af']:
         raise ValueError("time_period must be one of 'ltm', 'qf', 'af'")
 
-    if not indicator_names:
-        indicator_names = get_all_indicator_names()
+    indicator_names = indicator_names or get_all_indicator_names()
+    indicators_builders = indicators_builders or GLOBAL_INDICATORS
 
     # Retrieve time and asset data
     start_date_offset = datetime.timedelta(days=730)
@@ -101,7 +105,8 @@ def get_computed_facts(stocks_market_data: xr.DataArray,
     assets_with_ciks = load_ndx_list(min_date, max_date) if 'NAS:' in asset_names[0] else load_list(min_date, max_date)
     ciks = [asset['cik'] for asset in assets_with_ciks if asset['id'] in asset_names and 'cik' in asset]
     facts_names = list(
-        {fact for name in indicator_names if name in global_indicators for fact in global_indicators[name]['facts']})
+        {fact for name in indicator_names if name in indicators_builders for fact in
+         indicators_builders[name]['facts']})
 
     all_facts = load_all_facts(ciks, facts_names, min_date, max_date)
     fundamental_data = initialize_fundamental_data(stocks_market_data, facts_names)
@@ -261,24 +266,6 @@ def build_eps(fundamental_facts: xr.DataArray) -> xr.DataArray:
     return eps
 
 
-def build_ev(fundamental_facts: xr.DataArray) -> xr.DataArray:
-    net_debt = build_net_debt(fundamental_facts)
-    market_capitalization = build_market_capitalization(fundamental_facts)
-
-    ev = market_capitalization + net_debt
-
-    return ev
-
-
-def build_market_capitalization(fundamental_facts: xr.DataArray) -> xr.DataArray:
-    shares = build_shares(fundamental_facts)
-    close_price = fundamental_facts.sel(field='close')
-
-    market_capitalization = shares * close_price
-
-    return market_capitalization
-
-
 def build_liabilities(fundamental_facts: xr.DataArray) -> xr.DataArray:
     liabilities = fundamental_facts.sel(field='us-gaap:Liabilities')
     total = fundamental_facts.sel(field='us-gaap:LiabilitiesAndStockholdersEquity')
@@ -379,17 +366,6 @@ def build_ebitda_simple(fundamental_facts: xr.DataArray) -> xr.DataArray:
     return ebitda_simple
 
 
-def build_ev_divide_by_ebitda(fundamental_facts: xr.DataArray) -> xr.DataArray:
-    ebitda_simple = build_ebitda_simple(fundamental_facts)
-    ev = build_ev(fundamental_facts)
-
-    ev_divide_by_ebitda = ev / ebitda_simple
-
-    ev_divide_by_ebitda = ev_divide_by_ebitda.where(np.isfinite(ev_divide_by_ebitda), np.nan)
-
-    return ev_divide_by_ebitda
-
-
 def build_liabilities_divide_by_ebitda(fundamental_facts: xr.DataArray) -> xr.DataArray:
     ebitda_simple = build_ebitda_simple(fundamental_facts)
     liabilities = build_liabilities(fundamental_facts)
@@ -410,6 +386,46 @@ def build_net_debt_divide_by_ebitda(fundamental_facts: xr.DataArray) -> xr.DataA
     net_debt_divide_by_ebitda = net_debt_divide_by_ebitda.where(np.isfinite(net_debt_divide_by_ebitda), np.nan)
 
     return net_debt_divide_by_ebitda
+
+
+def build_roe(fundamental_facts: xr.DataArray) -> xr.DataArray:
+    net_income = build_net_income(fundamental_facts)
+    equity = build_equity(fundamental_facts)
+
+    roe = net_income / equity
+
+    roe = roe.where(np.isfinite(roe), np.nan)
+
+    return roe
+
+
+def build_ev(fundamental_facts: xr.DataArray) -> xr.DataArray:
+    net_debt = build_net_debt(fundamental_facts)
+    market_capitalization = build_market_capitalization(fundamental_facts)
+
+    ev = market_capitalization + net_debt
+
+    return ev
+
+
+def build_market_capitalization(fundamental_facts: xr.DataArray) -> xr.DataArray:
+    shares = build_shares(fundamental_facts)
+    close_price = fundamental_facts.sel(field='close')
+
+    market_capitalization = shares * close_price
+
+    return market_capitalization
+
+
+def build_ev_divide_by_ebitda(fundamental_facts: xr.DataArray) -> xr.DataArray:
+    ebitda_simple = build_ebitda_simple(fundamental_facts)
+    ev = build_ev(fundamental_facts)
+
+    ev_divide_by_ebitda = ev / ebitda_simple
+
+    ev_divide_by_ebitda = ev_divide_by_ebitda.where(np.isfinite(ev_divide_by_ebitda), np.nan)
+
+    return ev_divide_by_ebitda
 
 
 def build_p_divide_by_e(fundamental_facts: xr.DataArray) -> xr.DataArray:
@@ -456,19 +472,8 @@ def build_ev_divide_by_s(fundamental_facts: xr.DataArray) -> xr.DataArray:
     return ev_divide_by_s
 
 
-def build_roe(fundamental_facts: xr.DataArray) -> xr.DataArray:
-    net_income = build_net_income(fundamental_facts)
-    equity = build_equity(fundamental_facts)
-
-    roe = net_income / equity
-
-    roe = roe.where(np.isfinite(roe), np.nan)
-
-    return roe
-
-
 def get_all_indicator_names():
-    return list(global_indicators.keys())
+    return list(GLOBAL_INDICATORS.keys())
 
 
 def get_complex_indicator_names():
@@ -496,15 +501,15 @@ def get_standard_indicator_names():
 def get_annual_indicator_names():
     annual_indicator_names = []
 
-    for indicator_name, indicator_data in global_indicators.items():
+    for indicator_name, indicator_data in GLOBAL_INDICATORS.items():
         facts = indicator_data.get('facts', [])
-        if all(fact in annual_indicator for fact in facts):
+        if all(fact in GLOBAL_ANNUAL_US_GAAPS for fact in facts):
             annual_indicator_names.append(indicator_name)
 
     return annual_indicator_names
 
 
-annual_indicator = [
+GLOBAL_ANNUAL_US_GAAPS = [
     'us-gaap:GainsLossesOnExtinguishmentOfDebt',
     'us-gaap:Assets',
     'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
@@ -530,7 +535,7 @@ annual_indicator = [
     'dei:EntityCommonStockSharesOutstanding'
 ]
 
-global_custom_ltm = {
+GLOBAL_CUSTOM_LTM_US_GAAPS = {
     'us-gaap:DepreciationAmortizationAndAccretionNet': IndicatorUtils.get_ltm_amortization,
     'us-gaap:DepreciationAndAmortization': IndicatorUtils.get_ltm_amortization,
     'us-gaap:DepreciationDepletionAndAmortization': IndicatorUtils.get_ltm_amortization,
@@ -591,7 +596,7 @@ FACT_GROUPS = {
     ],
 }
 
-global_indicators = {
+GLOBAL_INDICATORS = {
     'total_revenue': {'facts': ['us-gaap:Revenues'],
                       'build': build_revenues},
 
@@ -698,10 +703,6 @@ global_indicators = {
         'facts': FACT_GROUPS['shares'],
         'build': build_shares,
     },
-    'market_capitalization': {
-        'facts': FACT_GROUPS['shares'],
-        'build': build_market_capitalization,
-    },
     'ebitda_use_income_before_taxes': {
         'facts': FACT_GROUPS['income'] + FACT_GROUPS['interest'] + FACT_GROUPS['ebitda'],
         'build': build_ebitda_use_income_before_taxes,
@@ -720,16 +721,6 @@ global_indicators = {
     ],
                       'build': build_ebitda_simple},
 
-    'ev': {
-        'facts': FACT_GROUPS['shares'] + FACT_GROUPS['debt'] + FACT_GROUPS['cash_equivalents'],
-        'build': build_ev
-    },
-
-    'ev_divide_by_ebitda': {
-        'facts': FACT_GROUPS['ebitda'] + FACT_GROUPS['shares'] + FACT_GROUPS['debt'] + FACT_GROUPS['cash_equivalents'],
-        'build': build_ev_divide_by_ebitda
-    },
-
     'liabilities_divide_by_ebitda': {
         'facts': FACT_GROUPS['ebitda'] + [
             'us-gaap:Liabilities',
@@ -745,35 +736,50 @@ global_indicators = {
         'build': build_net_debt_divide_by_ebitda
     },
 
-    'p_divide_by_e': {'facts': [
-        'us-gaap:NetIncomeLoss',
-        'dei:EntityCommonStockSharesOutstanding',
-    ],
-        'build': build_p_divide_by_e},
-
-    'p_divide_by_bv': {'facts': [
-        'dei:EntityCommonStockSharesOutstanding',
-        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
-        'us-gaap:StockholdersEquity'
-    ],
-        'build': build_p_divide_by_bv},
-
-    'p_divide_by_s': {'facts': [
-        'dei:EntityCommonStockSharesOutstanding',
-        'us-gaap:Revenues'
-    ],
-        'build': build_p_divide_by_s},
-
-    'ev_divide_by_s': {'facts': FACT_GROUPS['debt'] + FACT_GROUPS['cash_equivalents'] + [
-        'dei:EntityCommonStockSharesOutstanding',
-        'us-gaap:Revenues',
-    ],
-                       'build': build_ev_divide_by_s},
-
     'roe': {'facts': [
         'us-gaap:NetIncomeLoss',
         'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
         'us-gaap:StockholdersEquity'
     ],
         'build': build_roe},
+
+    # 'market_capitalization': {
+    #     'facts': FACT_GROUPS['shares'],
+    #     'build': build_market_capitalization,
+    # },
+    # 'ev': {
+    #     'facts': FACT_GROUPS['shares'] + FACT_GROUPS['debt'] + FACT_GROUPS['cash_equivalents'],
+    #     'build': build_ev
+    # },
+    #
+    # 'ev_divide_by_ebitda': {
+    #     'facts': FACT_GROUPS['ebitda'] + FACT_GROUPS['shares'] + FACT_GROUPS['debt'] + FACT_GROUPS['cash_equivalents'],
+    #     'build': build_ev_divide_by_ebitda
+    # },
+    #
+    # 'p_divide_by_e': {'facts': [
+    #     'us-gaap:NetIncomeLoss',
+    #     'dei:EntityCommonStockSharesOutstanding',
+    # ],
+    #     'build': build_p_divide_by_e},
+    #
+    # 'p_divide_by_bv': {'facts': [
+    #     'dei:EntityCommonStockSharesOutstanding',
+    #     'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+    #     'us-gaap:StockholdersEquity'
+    # ],
+    #     'build': build_p_divide_by_bv},
+    #
+    # 'p_divide_by_s': {'facts': [
+    #     'dei:EntityCommonStockSharesOutstanding',
+    #     'us-gaap:Revenues'
+    # ],
+    #     'build': build_p_divide_by_s},
+    #
+    # 'ev_divide_by_s': {'facts': FACT_GROUPS['debt'] + FACT_GROUPS['cash_equivalents'] + [
+    #     'dei:EntityCommonStockSharesOutstanding',
+    #     'us-gaap:Revenues',
+    # ],
+    #                    'build': build_ev_divide_by_s},
+
 }
