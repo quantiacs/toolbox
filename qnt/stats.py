@@ -109,6 +109,10 @@ def calc_relative_return(data, portfolio_history,
         RR[:] = res
         return RR.loc[min_time:]
 
+    # The `calc_relative_return_np_per_asset` algorithm differs from `calc_relative_return_np` in handling `non_tradeable_assets`.
+    # In `calc_relative_return_np`, positions are zeroed out, effectively nullifying the capital.
+    # In `calc_relative_return_np_per_asset`, the algorithm freezes the share count and capital until a new price value emerges.
+
 
 @numba.njit
 def calc_relative_return_np_per_asset(WEIGHT, UNLOCKED, OPEN, CLOSE, SLIPPAGE, DIVS, ROLL, ROLL_SLIPPAGE):
@@ -213,12 +217,10 @@ def calc_relative_return_np(WEIGHT, UNLOCKED, OPEN, CLOSE, SLIPPAGE, DIVS, ROLL,
             roll_costs = np.sign(shares_count[day]) * partial_shares * ROLL[day] + partial_shares * ROLL_SLIPPAGE[day]
             equity_after_buy[day] -= np.nansum(roll_costs)
 
-        if day > 0:
-            shares_count[day][non_tradeable_assets] = shares_count[day - 1][non_tradeable_assets]
-
         equity_tonight[day] = equity_after_buy[day] + np.nansum((CLOSE[day] - OPEN[day]) * shares_count[day])
 
-        # shares_count[day][non_tradeable_assets] = 0  # this happens if the asset has no price
+        # Set shares count to 0 for assets without a price. Reasons: company could've ceased to exist, been acquired, or there's a provider error
+        shares_count[day][non_tradeable_assets] = 0
 
     E = equity_tonight
     Ep = np.roll(E, 1)

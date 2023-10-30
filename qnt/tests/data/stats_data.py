@@ -31,6 +31,44 @@ ds = Dimensions
 
 dims = (ds.FIELD, ds.TIME, ds.ASSET)
 
+STANDARD_STOCKS_SCHEMA = {"fields": [{"name": "time", "type": "datetime"}, {"name": "open", "type": "integer"},
+                                     {"name": "close", "type": "integer"}, {"name": "low", "type": "integer"},
+                                     {"name": "high", "type": "integer"}, {"name": "vol", "type": "integer"},
+                                     {"name": "divs", "type": "integer"}, {"name": "split", "type": "integer"},
+                                     {"name": "split_cumprod", "type": "integer"},
+                                     {"name": "is_liquid", "type": "integer"}], "primaryKey": ["time"],
+                          "pandas_version": "0.20.0"}
+
+STANDARD_STOCKS_DATA_14 = [
+    {"time": "2021-01-30T00:00:00.000Z", "open": 1, "close": 2, "low": 1, "high": 2, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-01-31T00:00:00.000Z", "open": 2, "close": 3, "low": 2, "high": 3, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-01T00:00:00.000Z", "open": 3, "close": 4, "low": 3, "high": 4, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-02T00:00:00.000Z", "open": 4, "close": 5, "low": 4, "high": 5, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-03T00:00:00.000Z", "open": 5, "close": 6, "low": 5, "high": 6, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-04T00:00:00.000Z", "open": 6, "close": 7, "low": 6, "high": 7, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-05T00:00:00.000Z", "open": 7, "close": 8, "low": 7, "high": 8, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-06T00:00:00.000Z", "open": 8, "close": 9, "low": 8, "high": 9, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-07T00:00:00.000Z", "open": 9, "close": 10, "low": 9, "high": 10, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-08T00:00:00.000Z", "open": 10, "close": 11, "low": 10, "high": 11, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-09T00:00:00.000Z", "open": 11, "close": 12, "low": 11, "high": 12, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-10T00:00:00.000Z", "open": 12, "close": 13, "low": 12, "high": 13, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-11T00:00:00.000Z", "open": 13, "close": 14, "low": 13, "high": 14, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    {"time": "2021-02-12T00:00:00.000Z", "open": 14, "close": 15, "low": 14, "high": 15, "vol": 1000, "divs": 0,
+     "split": 0, "split_cumprod": 0, "is_liquid": 1}, ]
+
 
 def get_base_df():
     # def get_base_df():
@@ -56,41 +94,7 @@ def get_base_df():
     #
     # get_base_df()
 
-    try_result = {"schema": {"fields": [{"name": "time", "type": "datetime"}, {"name": "open", "type": "integer"},
-                                        {"name": "close", "type": "integer"}, {"name": "low", "type": "integer"},
-                                        {"name": "high", "type": "integer"}, {"name": "vol", "type": "integer"},
-                                        {"name": "divs", "type": "integer"}, {"name": "split", "type": "integer"},
-                                        {"name": "split_cumprod", "type": "integer"},
-                                        {"name": "is_liquid", "type": "integer"}], "primaryKey": ["time"],
-                             "pandas_version": "0.20.0"}, "data": [
-        {"time": "2021-01-30T00:00:00.000Z", "open": 1, "close": 2, "low": 1, "high": 2, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-01-31T00:00:00.000Z", "open": 2, "close": 3, "low": 2, "high": 3, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-01T00:00:00.000Z", "open": 3, "close": 4, "low": 3, "high": 4, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-02T00:00:00.000Z", "open": 4, "close": 5, "low": 4, "high": 5, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-03T00:00:00.000Z", "open": 5, "close": 6, "low": 5, "high": 6, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-04T00:00:00.000Z", "open": 6, "close": 7, "low": 6, "high": 7, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-05T00:00:00.000Z", "open": 7, "close": 8, "low": 7, "high": 8, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-06T00:00:00.000Z", "open": 8, "close": 9, "low": 8, "high": 9, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-07T00:00:00.000Z", "open": 9, "close": 10, "low": 9, "high": 10, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-08T00:00:00.000Z", "open": 10, "close": 11, "low": 10, "high": 11, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-09T00:00:00.000Z", "open": 11, "close": 12, "low": 11, "high": 12, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-10T00:00:00.000Z", "open": 12, "close": 13, "low": 12, "high": 13, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-11T00:00:00.000Z", "open": 13, "close": 14, "low": 13, "high": 14, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-12T00:00:00.000Z", "open": 14, "close": 15, "low": 14, "high": 15, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    try_result = {"schema": STANDARD_STOCKS_SCHEMA, "data": STANDARD_STOCKS_DATA_14 + [
         {"time": "2021-02-13T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
          "split": 0, "split_cumprod": 0, "is_liquid": 1},
         {"time": "2021-02-14T00:00:00.000Z", "open": 16, "close": 17, "low": 16, "high": 17, "vol": 1000, "divs": 0,
@@ -267,6 +271,117 @@ def get_base_df():
     return get_xr(try_result)
 
 
+def get_base_df_two():
+    try_result = {"schema": STANDARD_STOCKS_SCHEMA, "data": STANDARD_STOCKS_DATA_14 + [
+        {"time": "2021-02-13T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-14T00:00:00.000Z", "open": 16, "close": 17, "low": 16, "high": 17, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-15T00:00:00.000Z", "open": 17, "close": 18, "low": 17, "high": 18, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-16T00:00:00.000Z", "open": 18, "close": 19, "low": 18, "high": 19, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-17T00:00:00.000Z", "open": 19, "close": 20, "low": 19, "high": 20, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-18T00:00:00.000Z", "open": 20, "close": 21, "low": 20, "high": 21, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-19T00:00:00.000Z", "open": 21, "close": 22, "low": 21, "high": 22, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-20T00:00:00.000Z", "open": 22, "close": 23, "low": 22, "high": 23, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-21T00:00:00.000Z", "open": 23, "close": 24, "low": 23, "high": 24, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-22T00:00:00.000Z", "open": 24, "close": 25, "low": 24, "high": 25, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-23T00:00:00.000Z", "open": 25, "close": 26, "low": 25, "high": 26, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-24T00:00:00.000Z", "open": 26, "close": 27, "low": 26, "high": 27, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-25T00:00:00.000Z", "open": 27, "close": 28, "low": 27, "high": 28, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-26T00:00:00.000Z", "open": 28, "close": 29, "low": 28, "high": 29, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-27T00:00:00.000Z", "open": 29, "close": 30, "low": 29, "high": 30, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    ]}
+    btc = get_xr(try_result, asset='BTC')
+    eth = get_xr(try_result, asset='ETH')
+
+    combined = xr.concat([btc, eth], dim='asset')
+
+    return combined
+
+
+
+def get_base_df_two_with_NaN():
+    try_result = {"schema": STANDARD_STOCKS_SCHEMA, "data": [
+        {"time": "2021-01-30T00:00:00.000Z", "open": 1, "close": 2, "low": 1, "high": 2, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-01-31T00:00:00.000Z", "open": 2, "close": 3, "low": 2, "high": 3, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-01T00:00:00.000Z", "open": 3, "close": 4, "low": 3, "high": 4, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-02T00:00:00.000Z", "open": 4, "close": 5, "low": 4, "high": 5, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-03T00:00:00.000Z", "open": 5, "close": 6, "low": 5, "high": 6, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-04T00:00:00.000Z", "open": 6, "close": 7, "low": 6, "high": 7, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-05T00:00:00.000Z", "open": None, "close": None, "low": None, "high": None, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-06T00:00:00.000Z", "open": 8, "close": 9, "low": 8, "high": 9, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-07T00:00:00.000Z", "open": 9, "close": 10, "low": 9, "high": 10, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-08T00:00:00.000Z", "open": 10, "close": 11, "low": 10, "high": 11, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-09T00:00:00.000Z", "open": 11, "close": 12, "low": 11, "high": 12, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-10T00:00:00.000Z", "open": 12, "close": 13, "low": 12, "high": 13, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-11T00:00:00.000Z", "open": 13, "close": 14, "low": 13, "high": 14, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-12T00:00:00.000Z", "open": 14, "close": 15, "low": 14, "high": 15, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-13T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-14T00:00:00.000Z", "open": 16, "close": 17, "low": 16, "high": 17, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-15T00:00:00.000Z", "open": 17, "close": 18, "low": 17, "high": 18, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-16T00:00:00.000Z", "open": 18, "close": 19, "low": 18, "high": 19, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-17T00:00:00.000Z", "open": 19, "close": 20, "low": 19, "high": 20, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-18T00:00:00.000Z", "open": 20, "close": 21, "low": 20, "high": 21, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-19T00:00:00.000Z", "open": 21, "close": 22, "low": 21, "high": 22, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-20T00:00:00.000Z", "open": 22, "close": 23, "low": 22, "high": 23, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-21T00:00:00.000Z", "open": 23, "close": 24, "low": 23, "high": 24, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-22T00:00:00.000Z", "open": 24, "close": 25, "low": 24, "high": 25, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-23T00:00:00.000Z", "open": 25, "close": 26, "low": 25, "high": 26, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-24T00:00:00.000Z", "open": 26, "close": 27, "low": 26, "high": 27, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-25T00:00:00.000Z", "open": 27, "close": 28, "low": 27, "high": 28, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-26T00:00:00.000Z", "open": 28, "close": 29, "low": 28, "high": 29, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        {"time": "2021-02-27T00:00:00.000Z", "open": 29, "close": 30, "low": 29, "high": 30, "vol": 1000, "divs": 0,
+         "split": 0, "split_cumprod": 0, "is_liquid": 1},
+    ]}
+    btc = get_xr(try_result, asset='BTC')
+    eth = get_xr(try_result, asset='ETH')
+
+    combined = xr.concat([btc, eth], dim='asset')
+
+    return combined
+
+
 def get_xr(dataframe, asset='BTC'):
     columns = [Dimensions.TIME, f.OPEN, f.CLOSE, f.LOW, f.HIGH, f.VOL, f.DIVS, f.SPLIT, f.SPLIT_CUMPROD,
                f.IS_LIQUID]
@@ -411,55 +526,57 @@ def get_cripto_futures():
     return get_xr(data)
 
 
+def get_xr_correct():
+    try_result = {"schema": STANDARD_STOCKS_SCHEMA
+        , "data": STANDARD_STOCKS_DATA_14 + [
+            {"time": "2021-02-13T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
+             "split": 0, "split_cumprod": 0, "is_liquid": 1},
+            {"time": "2021-02-14T00:00:00.000Z", "open": 15, "close": 17, "low": 16, "high": 17, "vol": 1000, "divs": 0,
+             "split": 0, "split_cumprod": 0, "is_liquid": 1},
+            {"time": "2021-02-15T00:00:00.000Z", "open": 17, "close": 18, "low": 17, "high": 18, "vol": 1000, "divs": 0,
+             "split": 0, "split_cumprod": 0, "is_liquid": 1},
+            {"time": "2021-02-16T00:00:00.000Z", "open": 18, "close": 19, "low": 18, "high": 19, "vol": 1000, "divs": 0,
+             "split": 0, "split_cumprod": 0, "is_liquid": 1},
+            {"time": "2021-02-17T00:00:00.000Z", "open": 19, "close": 20, "low": 19, "high": 20, "vol": 1000, "divs": 0,
+             "split": 0, "split_cumprod": 0, "is_liquid": 1},
+            {"time": "2021-02-18T00:00:00.000Z", "open": 20, "close": 21, "low": 20, "high": 21, "vol": 1000, "divs": 0,
+             "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        ]}
+
+    btc = get_xr(try_result, asset='BTC')
+    eth = get_xr(try_result, asset='ETH')
+
+    combined = xr.concat([btc, eth], dim='asset')
+
+    return combined
+
+
 def get_xr_with_NaN():
-    try_result = {"schema": {"fields": [{"name": "time", "type": "datetime"}, {"name": "open", "type": "integer"},
-                                        {"name": "close", "type": "integer"}, {"name": "low", "type": "integer"},
-                                        {"name": "high", "type": "integer"}, {"name": "vol", "type": "integer"},
-                                        {"name": "divs", "type": "integer"}, {"name": "split", "type": "integer"},
-                                        {"name": "split_cumprod", "type": "integer"},
-                                        {"name": "is_liquid", "type": "integer"}], "primaryKey": ["time"],
-                             "pandas_version": "0.20.0"}, "data": [
-        {"time": "2021-01-30T00:00:00.000Z", "open": 1, "close": 2, "low": 1, "high": 2, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-01-31T00:00:00.000Z", "open": 2, "close": 3, "low": 2, "high": 3, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-01T00:00:00.000Z", "open": 3, "close": 4, "low": 3, "high": 4, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-02T00:00:00.000Z", "open": 4, "close": 5, "low": 4, "high": 5, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-03T00:00:00.000Z", "open": 5, "close": 6, "low": 5, "high": 6, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-04T00:00:00.000Z", "open": 6, "close": 7, "low": 6, "high": 7, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-05T00:00:00.000Z", "open": 7, "close": 8, "low": 7, "high": 8, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-06T00:00:00.000Z", "open": 8, "close": 9, "low": 8, "high": 9, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-07T00:00:00.000Z", "open": 9, "close": 10, "low": 9, "high": 10, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-08T00:00:00.000Z", "open": 10, "close": 11, "low": 10, "high": 11, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-09T00:00:00.000Z", "open": 11, "close": 12, "low": 11, "high": 12, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-10T00:00:00.000Z", "open": 12, "close": 13, "low": 12, "high": 13, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-11T00:00:00.000Z", "open": 13, "close": 14, "low": 13, "high": 14, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-12T00:00:00.000Z", "open": 14, "close": 15, "low": 14, "high": 15, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-13T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-14T00:00:00.000Z", "open": None, "close": None, "low": 16, "high": 17, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-15T00:00:00.000Z", "open": np.nan, "close": np.nan, "low": 17, "high": 18, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-16T00:00:00.000Z", "open": 18, "close": 19, "low": 18, "high": 19, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-17T00:00:00.000Z", "open": 19, "close": 20, "low": 19, "high": 20, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-18T00:00:00.000Z", "open": None, "close": None, "low": 20, "high": 21, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-    ]}
+    try_result = {"schema": STANDARD_STOCKS_SCHEMA,
+                  "data": STANDARD_STOCKS_DATA_14 + [
+                      {"time": "2021-02-13T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16,
+                       "vol": 1000, "divs": 0,
+                       "split": 0, "split_cumprod": 0, "is_liquid": 1},
+                      {"time": "2021-02-14T00:00:00.000Z", "open": None, "close": None, "low": None, "high": None,
+                       "vol": 1000,
+                       "divs": 0,
+                       "split": 0, "split_cumprod": 0, "is_liquid": 1},
+                      {"time": "2021-02-15T00:00:00.000Z", "open": np.nan, "close": np.nan, "low": np.nan,
+                       "high": np.nan,
+                       "vol": 1000,
+                       "divs": 0,
+                       "split": 0, "split_cumprod": 0, "is_liquid": 1},
+                      {"time": "2021-02-16T00:00:00.000Z", "open": 18, "close": 19, "low": 18, "high": 19,
+                       "vol": 1000, "divs": 0,
+                       "split": 0, "split_cumprod": 0, "is_liquid": 1},
+                      {"time": "2021-02-17T00:00:00.000Z", "open": 19, "close": 20, "low": 19, "high": 20,
+                       "vol": 1000, "divs": 0,
+                       "split": 0, "split_cumprod": 0, "is_liquid": 1},
+                      {"time": "2021-02-18T00:00:00.000Z", "open": None, "close": None, "low": None, "high": None,
+                       "vol": 1000,
+                       "divs": 0,
+                       "split": 0, "split_cumprod": 0, "is_liquid": 1},
+                  ]}
 
     btc = get_xr(try_result, asset='BTC')
     eth = get_xr(try_result, asset='ETH')

@@ -64,7 +64,77 @@ def get_rr_dataframe_and_json(data, portfolio_history, per_asset=False, head=20,
     return rr_df, stat_head
 
 
+def load_data_and_create_data_array(filename, dims, transpose_order):
+    ds = xr.open_dataset(filename).load()
+    dataset_name = list(ds.data_vars)[0]
+    values = ds[dataset_name].transpose(*transpose_order).values
+    coords = {dim: ds[dim].values for dim in dims}
+    return xr.DataArray(values, dims=dims, coords=coords)
+
+
 class TestBaseStatistic(unittest.TestCase):
+
+    def test_relative_return_border_case_per_asset(self):
+        dir = os.path.abspath(os.curdir)
+
+        dims = ['time', 'asset']
+        weights = load_data_and_create_data_array(f"{dir}/data/weights_2022_02_09_no_short.nc", dims, dims)
+
+        dims = ['field', 'time', 'asset']
+        data = load_data_and_create_data_array(f"{dir}/data/data_2022_01_09.nc", dims, dims)
+
+        assets = data.asset.values
+        for asset in assets:
+            if asset in ['NAS:WBD', 'NAS:XLNX']:
+                continue
+
+            asset_data = data.sel(asset=[asset])
+            asset_weights = weights.sel(asset=[asset])
+
+            asset_data_pd = asset_data.sel(field='close').to_pandas()
+            asset_weights_pd = asset_weights.to_pandas()
+
+            is_liquid = asset_data.sel(field="is_liquid") * asset_weights
+
+            portfolio_history = qnstats.output_normalize(is_liquid, per_asset=False)
+            rr_df, stat_head = get_rr_dataframe_and_json(asset_data, portfolio_history)
+
+            is_liquid_slice = is_liquid.sel(time=slice("2022-02-10", None))
+
+            portfolio_history_slice = qnstats.output_normalize(is_liquid_slice, per_asset=False)
+            rr_df_slice, stat_head_slice = get_rr_dataframe_and_json(asset_data, portfolio_history_slice,
+                                                                     per_asset=False, head=19, tail=8)
+            print(asset)
+            self.assertEqual(stat_head, stat_head_slice)
+
+    def test_relative_return_border_case(self):
+        dir = os.path.abspath(os.curdir)
+
+        dims = ['time', 'asset']
+        weights = load_data_and_create_data_array(f"{dir}/data/weights_2022_02_09_no_short.nc", dims, dims)
+
+        dims = ['field', 'time', 'asset']
+        data = load_data_and_create_data_array(f"{dir}/data/data_2022_01_09.nc", dims, dims)
+
+        assets = data.asset.values
+        # filtered_assets = [asset for asset in assets if asset not in ['NAS:WBD', 'NAS:XLNX']]
+        filtered_assets = assets
+
+        data = data.sel(asset=filtered_assets)
+        weights = weights.sel(asset=filtered_assets)
+
+        is_liquid = data.sel(field="is_liquid") * weights
+
+        portfolio_history = qnstats.output_normalize(is_liquid, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        is_liquid_slice = is_liquid.sel(time=slice("2022-02-10", None))
+
+        portfolio_history_slice = qnstats.output_normalize(is_liquid_slice, per_asset=False)
+        rr_df_slice, stat_head_slice = get_rr_dataframe_and_json(data, portfolio_history_slice,
+                                                                 per_asset=False, head=19, tail=8)
+
+        self.assertEqual(stat_head, stat_head_slice)
 
     def test_relative_return_no_liquid(self):
         data = stats_data.get_base_df()
@@ -111,38 +181,40 @@ class TestBaseStatistic(unittest.TestCase):
         stats_ETH_simple_ = statsETH_simple.to_pandas().tail(1).to_json(orient="table")
         # This happens because after normalization, the weights for ETH decrease by half.
         self.assertEqual(
-            {'data': [{'avg_holding_time': 8.5,
-                       'avg_turnover': 0.081180067,
+            {'data': [{'avg_holding_time': 8.0,
+                       'avg_turnover': 0.1054668795,
                        'bias': 0.0,
-                       'equity': 1.0516051444,
+                       'equity': 1.0232916667,
                        'instruments': 1.0,
                        'max_drawdown': -0.0323101777,
-                       'mean_return': 1.5050235383,
+                       'mean_return': 0.5222631434,
                        'relative_return': 0.0,
-                       'sharpe_ratio': 6.1342976445,
+                       'sharpe_ratio': 2.3784078181,
                        'time': '2021-02-18T00:00:00.000Z',
-                       'underwater': 0.0,
-                       'volatility': 0.2453456982}],
+                       'underwater': -0.0081179321,
+                       'volatility': 0.2195851945}],
              'schema': EXPECTED_JSON_SCHEMA['statistic']}, json.loads(stats_ETH_full_))
 
         self.assertEqual(
-            {'data': [{'avg_holding_time': 8.5,
-                       'avg_turnover': 0.1595265612,
+            {'data': [{'avg_holding_time': 8.0,
+                       'avg_turnover': 0.2093873416,
                        'bias': 0.0,
-                       'equity': 1.1044858918,
+                       'equity': 1.0465,
                        'instruments': 1.0,
                        'max_drawdown': -0.0626959248,
-                       'mean_return': 5.1330026595,
+                       'mean_return': 1.2921392413,
                        'relative_return': 0.0,
-                       'sharpe_ratio': 10.5648904346,
+                       'sharpe_ratio': 2.9783175293,
                        'time': '2021-02-18T00:00:00.000Z',
-                       'underwater': 0.0,
-                       'volatility': 0.4858547934}],
+                       'underwater': -0.015830721,
+                       'volatility': 0.4338487178}],
              'schema': EXPECTED_JSON_SCHEMA['statistic']}, json.loads(stats_ETH_simple_))
 
     def test_relative_return_NaN(self):
         data = stats_data.get_xr_with_NaN()
         one = data.sel(field="close") - data.sel(field="close") + 1
+
+        one = one.fillna(1)
 
         portfolio_history = qnstats.output_normalize(one, per_asset=False)
         rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
@@ -151,12 +223,34 @@ class TestBaseStatistic(unittest.TestCase):
                                    {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
                                    {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
                                    {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.09375*2},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': -0.0625},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
                                    {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
                                    {'time': '2021-02-18T00:00:00.000Z', 'values': 0.0}],
                           'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
 
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667,
+                                    'ETH': 0.0666666667,
+                                    'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.1875, 'ETH': 0.1875, 'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789,
+                                    'ETH': 0.0526315789,
+                                    'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'},
+                                                {'name': 'ETH', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
         rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
 
         self.assertEqual({'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
@@ -166,8 +260,8 @@ class TestBaseStatistic(unittest.TestCase):
                                     'time': '2021-02-13T00:00:00.000Z'},
                                    {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-14T00:00:00.000Z'},
                                    {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
-                                   {'BTC': 0.09375,
-                                    'ETH': 0.09375,
+                                   {'BTC': 0.0977822581,
+                                    'ETH': 0.0977822581,
                                     'time': '2021-02-16T00:00:00.000Z'},
                                    {'BTC': 0.0263157895,
                                     'ETH': 0.0263157895,
@@ -178,7 +272,6 @@ class TestBaseStatistic(unittest.TestCase):
                                                 {'name': 'ETH', 'type': 'number'}],
                                      'pandas_version': '0.20.0',
                                      'primaryKey': ['time']}}, stat_head)
-
 
     def test_relative_return_NaN_one(self):
         data_two = stats_data.get_xr_with_NaN()
@@ -194,8 +287,8 @@ class TestBaseStatistic(unittest.TestCase):
                                    {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
                                    {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
                                    {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.1875},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': -0.0625},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
                                    {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
                                    {'time': '2021-02-18T00:00:00.000Z', 'values': 0.0}],
                           'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
@@ -218,18 +311,6 @@ class TestBaseStatistic(unittest.TestCase):
     def test_relative_return_complex(self):
         data = stats_data.get_base_df()
         one = data.sel(field="close") - data.sel(field="close") + 1
-
-        portfolio_history = qnstats.output_normalize(one, per_asset=False)
-        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
-        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
-                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0625},
-                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0588235294},
-                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
-                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
-                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
-                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
 
         data.loc[dict(time='2021-02-15T00:00:00.000Z', asset='BTC', field='open')] = 4
 
@@ -265,6 +346,7 @@ class TestBaseStatistic(unittest.TestCase):
                                    {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
                           'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
 
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
         rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
 
         self.assertEqual({'data': [{'BTC': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
@@ -277,6 +359,161 @@ class TestBaseStatistic(unittest.TestCase):
                                    {'BTC': 0.05, 'time': '2021-02-18T00:00:00.000Z'}],
                           'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
                                                 {'name': 'BTC', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+        data_slice = data.sel(time=slice("2021-01-31", None))
+        one_slice = one.sel(time=slice('2021-01-31', None))
+
+        portfolio_history = qnstats.output_normalize(one_slice, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data_slice, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0625},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0588235294},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05},
+                                   {'time': '2021-02-19T00:00:00.000Z', 'values': 0.0476190476}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+    def test_relative_return_one_border_case(self):
+        data_two = stats_data.get_xr_correct()
+        data = data_two.sel(asset=['BTC'])
+
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='open')] = 15
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='close')] = 16
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='low')] = 15
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='high')] = 16
+
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='open')] = 15
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='close')] = 16
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='low')] = 15
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='high')] = 16
+        #
+        # {"time": "2021-02-13T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
+        #  "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        # {"time": "2021-02-14T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
+        #  "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        # {"time": "2021-02-15T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
+        #  "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        # {"time": "2021-02-16T00:00:00.000Z", "open": 18, "close": 19, "low": 18, "high": 19, "vol": 1000, "divs": 0,
+        #  "split": 0, "split_cumprod": 0, "is_liquid": 1},
+
+        one = data.sel(field="close") - data.sel(field="close") + 1
+        one = one.fillna(1)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667, 'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': -0.00390625, 'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.1797385621, 'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789, 'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': -0.00390625},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.1797385621},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='open')] = 18
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='close')] = 19
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='low')] = 18
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='high')] = 19
+
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='open')] = 18
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='close')] = 19
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='low')] = 18
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='high')] = 19
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.1875},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': -0.0027700831},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667, 'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': 0.1875, 'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': -0.0027700831, 'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789, 'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+    def test_relative_return_two(self):
+        data = stats_data.get_xr_correct()
+        one = data.sel(field="close") - data.sel(field="close") + 1
+        one = one.fillna(1)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0546875},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0588235294},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667,
+                                    'ETH': 0.0666666667,
+                                    'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': 0.0546875,
+                                    'ETH': 0.0546875,
+                                    'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': 0.0588235294,
+                                    'ETH': 0.0588235294,
+                                    'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.0555555556,
+                                    'ETH': 0.0555555556,
+                                    'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789,
+                                    'ETH': 0.0526315789,
+                                    'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'ETH': 0.05, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'},
+                                                {'name': 'ETH', 'type': 'number'}],
                                      'pandas_version': '0.20.0',
                                      'primaryKey': ['time']}}, stat_head)
 
@@ -646,6 +883,15 @@ class TestBaseStatistic(unittest.TestCase):
                           'schema': EXPECTED_JSON_SCHEMA['statistic']}, json.loads(stat_tail))
 
     def test_relative_return(self):
+        # this code demonstrates the problem of calculating if nan is found in the sample
+        #  {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-18T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-19T00:00:00.000Z', 'values': 0.0},
+
         data = stats_data.get_base_df()
         weights_two_day = data.head(100)
         one = weights_two_day.sel(field="close") - weights_two_day.sel(field="close") + 1
@@ -759,6 +1005,187 @@ class TestBaseStatistic(unittest.TestCase):
                       {"time": "2021-05-07T00:00:00.000Z", "values": 0.0102040816},
                       {"time": "2021-05-08T00:00:00.000Z", "values": 0.0101010101},
                       {"time": "2021-05-09T00:00:00.000Z", "values": 0.01}]}, stat_head)
+
+        data_two = stats_data.get_base_df_two_with_NaN()
+
+        data_ = data_two.sel(asset=['BTC'])
+
+        one_ = data_.sel(field="close") - data_.sel(field="close") + 1
+        one_ = one_.fillna(1)
+
+        portfolio_history_ = qnstats.output_normalize(one, per_asset=False)
+        rr_df, _ = get_rr_dataframe_and_json(data_, portfolio_history_)
+        stat_head = json.loads(rr_df.head(30).to_json(orient="table"))
+        self.assertEqual(
+            {"schema": EXPECTED_JSON_SCHEMA["base_values"],
+             "data": [{"time": "2021-01-30T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-01-31T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-01T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-02T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-03T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-04T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-05T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-06T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-07T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-08T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-09T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-10T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-11T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-12T00:00:00.000Z", "values": 0.0},
+                      {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-18T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-19T00:00:00.000Z', 'values': 0.0},
+                      {"time": "2021-02-20T00:00:00.000Z", "values": 0.0454545455},
+                      {"time": "2021-02-21T00:00:00.000Z", "values": 0.0434782609},
+                      {"time": "2021-02-22T00:00:00.000Z", "values": 0.0416666667},
+                      {"time": "2021-02-23T00:00:00.000Z", "values": 0.04},
+                      {"time": "2021-02-24T00:00:00.000Z", "values": 0.0384615385},
+                      {"time": "2021-02-25T00:00:00.000Z", "values": 0.037037037},
+                      {"time": "2021-02-26T00:00:00.000Z", "values": 0.0357142857},
+                      {"time": "2021-02-27T00:00:00.000Z", "values": 0.0344827586},
+                      ]}, stat_head)
+
+    def test_relative_return_per_asset(self):
+        # this code demonstrates the problem of calculating if nan is found in the sample
+        #  {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-13T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-14T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-16T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-17T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-18T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-19T00:00:00.000Z'},
+
+        data = stats_data.get_base_df_two()
+        one = data.sel(field="close") - data.sel(field="close") + 1
+        one = one.fillna(1)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+
+        rr_df, _ = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+        stat_head = json.loads(rr_df.to_json(orient="table"))
+        self.assertEqual(
+            {'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-01-30T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-01-31T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-01T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-02T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-03T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-04T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-05T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-06T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-07T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-08T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-09T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-10T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                      {'BTC': 0.0333333333,
+                       'ETH': 0.0333333333,
+                       'time': '2021-02-13T00:00:00.000Z'},
+                      {'BTC': 0.03125, 'ETH': 0.03125, 'time': '2021-02-14T00:00:00.000Z'},
+                      {'BTC': 0.0294117647,
+                       'ETH': 0.0294117647,
+                       'time': '2021-02-15T00:00:00.000Z'},
+                      {'BTC': 0.0277777778,
+                       'ETH': 0.0277777778,
+                       'time': '2021-02-16T00:00:00.000Z'},
+                      {'BTC': 0.0263157895,
+                       'ETH': 0.0263157895,
+                       'time': '2021-02-17T00:00:00.000Z'},
+                      {'BTC': 0.025, 'ETH': 0.025, 'time': '2021-02-18T00:00:00.000Z'},
+                      {'BTC': 0.0238095238,
+                       'ETH': 0.0238095238,
+                       'time': '2021-02-19T00:00:00.000Z'},
+                      {'BTC': 0.0227272727,
+                       'ETH': 0.0227272727,
+                       'time': '2021-02-20T00:00:00.000Z'},
+                      {'BTC': 0.0217391304,
+                       'ETH': 0.0217391304,
+                       'time': '2021-02-21T00:00:00.000Z'},
+                      {'BTC': 0.0208333333,
+                       'ETH': 0.0208333333,
+                       'time': '2021-02-22T00:00:00.000Z'},
+                      {'BTC': 0.02, 'ETH': 0.02, 'time': '2021-02-23T00:00:00.000Z'},
+                      {'BTC': 0.0192307692,
+                       'ETH': 0.0192307692,
+                       'time': '2021-02-24T00:00:00.000Z'},
+                      {'BTC': 0.0185185185,
+                       'ETH': 0.0185185185,
+                       'time': '2021-02-25T00:00:00.000Z'},
+                      {'BTC': 0.0178571429,
+                       'ETH': 0.0178571429,
+                       'time': '2021-02-26T00:00:00.000Z'},
+                      {'BTC': 0.0172413793,
+                       'ETH': 0.0172413793,
+                       'time': '2021-02-27T00:00:00.000Z'}],
+             'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                   {'name': 'BTC', 'type': 'number'},
+                                   {'name': 'ETH', 'type': 'number'}],
+                        'pandas_version': '0.20.0',
+                        'primaryKey': ['time']}}, stat_head)
+
+        data_two = stats_data.get_base_df_two_with_NaN()
+
+        one_ = data_two.sel(field="close") - data_two.sel(field="close") + 1
+        one_ = one_.fillna(1)
+
+        portfolio_history_ = qnstats.output_normalize(one_, per_asset=False)
+
+        rr_df, _ = get_rr_dataframe_and_json(data_two, portfolio_history_, per_asset=True)
+        stat_head = json.loads(rr_df.head(30).to_json(orient="table"))
+        self.assertEqual(
+            {'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-01-30T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-01-31T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-01T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-02T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-03T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-04T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-05T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-06T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-07T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-08T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-09T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-10T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-13T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-14T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-16T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-17T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-18T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-19T00:00:00.000Z'},
+                      {'BTC': 0.0227272727,
+                       'ETH': 0.0227272727,
+                       'time': '2021-02-20T00:00:00.000Z'},
+                      {'BTC': 0.0217391304,
+                       'ETH': 0.0217391304,
+                       'time': '2021-02-21T00:00:00.000Z'},
+                      {'BTC': 0.0208333333,
+                       'ETH': 0.0208333333,
+                       'time': '2021-02-22T00:00:00.000Z'},
+                      {'BTC': 0.02, 'ETH': 0.02, 'time': '2021-02-23T00:00:00.000Z'},
+                      {'BTC': 0.0192307692,
+                       'ETH': 0.0192307692,
+                       'time': '2021-02-24T00:00:00.000Z'},
+                      {'BTC': 0.0185185185,
+                       'ETH': 0.0185185185,
+                       'time': '2021-02-25T00:00:00.000Z'},
+                      {'BTC': 0.0178571429,
+                       'ETH': 0.0178571429,
+                       'time': '2021-02-26T00:00:00.000Z'},
+                      {'BTC': 0.0172413793,
+                       'ETH': 0.0172413793,
+                       'time': '2021-02-27T00:00:00.000Z'}],
+             'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                   {'name': 'BTC', 'type': 'number'},
+                                   {'name': 'ETH', 'type': 'number'}],
+                        'pandas_version': '0.20.0',
+                        'primaryKey': ['time']}}, stat_head)
+
 
 if __name__ == '__main__':
     unittest.main()
