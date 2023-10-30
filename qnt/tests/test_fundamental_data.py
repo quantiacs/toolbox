@@ -3,7 +3,10 @@ import pandas as pd
 
 import json
 import os
-import pickle5 as pickle
+
+import pandas as pd
+import xarray as xr
+import numpy as np
 
 os.environ['API_KEY'] = "default"
 
@@ -1186,11 +1189,20 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     self.assertEqual(10080, indicator.loc['2017-03-31 '].max() / 1000000)
 
 
+def load_data_and_create_data_array(filename, dims, transpose_order):
+    ds = xr.open_dataset(filename).load()
+    dataset_name = list(ds.data_vars)[0]
+    values = ds[dataset_name].transpose(*transpose_order).values
+    coords = {dim: ds[dim].values for dim in dims}
+    return xr.DataArray(values, dims=dims, coords=coords)
+
+
 def get_default_WMT_total_revenue():
     dir = os.path.abspath(os.curdir)
-    with open(dir + '/data/fundamental_NYSE_WMT_total_revenue.pkl', 'rb') as input:
-        total_revenue_default = pickle.load(input)
-    total_revenue_default = total_revenue_default.transpose('time', 'field', 'asset')
+
+    dims = ['time', 'field', 'asset']
+    total_revenue_default = load_data_and_create_data_array(f"{dir}/data/fundamental_NYSE_WMT_total_revenue.nc", dims,
+                                                            dims)
 
     NYSE_WMT = total_revenue_default.sel(asset=['NYSE:WMT'])
     NYSE_WMT_default = NYSE_WMT.sel(field='total_revenue').to_pandas()
@@ -1238,6 +1250,7 @@ def get_data_wmt():
                  'liabilities_calculated']
     fun_indicators = qnt.data.secgov_load_indicators([WMT, DOCU], time_coord=data.time, standard_indicators=data_lbls)
 
+    # import pickle
     # def save_object(obj, filename):
     #     with open(filename, 'wb') as output:  # Overwrites any existing file.
     #         pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
@@ -1303,7 +1316,7 @@ def get_data_new_for(asset_names, indicators_names):
     import qnt.data as qndata
     import qnt.data.secgov_fundamental as fundamental
 
-    import pickle
+    # import pickle
 
     # with open('stocks_all.pkl', 'rb') as handle:
     #     market_data = pickle.load(handle)

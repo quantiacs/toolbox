@@ -109,53 +109,59 @@ def calc_relative_return(data, portfolio_history,
         RR[:] = res
         return RR.loc[min_time:]
 
+    # The `calc_relative_return_np_per_asset` algorithm differs from `calc_relative_return_np` in handling `non_tradeable_assets`.
+    # In `calc_relative_return_np`, positions are zeroed out, effectively nullifying the capital.
+    # In `calc_relative_return_np_per_asset`, the algorithm freezes the share count and capital until a new price value emerges.
+
 
 @numba.njit
 def calc_relative_return_np_per_asset(WEIGHT, UNLOCKED, OPEN, CLOSE, SLIPPAGE, DIVS, ROLL, ROLL_SLIPPAGE):
-    N = np.zeros(WEIGHT.shape)  # shares count
+    shares_count = np.zeros(WEIGHT.shape)
 
     equity_before_buy = np.zeros(WEIGHT.shape)
     equity_after_buy = np.zeros(WEIGHT.shape)
     equity_tonight = np.zeros(WEIGHT.shape)
 
-    for t in range(0, WEIGHT.shape[0]):
-        unlocked = UNLOCKED[t]  # available for trading
+    for day in range(0, WEIGHT.shape[0]):
+        tradeable_assets = UNLOCKED[day]
 
-        if t == 0:
+        if day == 0:
             equity_before_buy[0] = 1
-            N[0] = 0
+            shares_count[0] = 0
         else:
-            N[t] = N[t - 1]
-            equity_before_buy[t] = equity_after_buy[t - 1] + (OPEN[t] - OPEN[t - 1] + DIVS[t]) * N[t]
+            shares_count[day] = shares_count[day - 1]
+            equity_before_buy[day] = equity_after_buy[day - 1] + (OPEN[day] - OPEN[day - 1] + DIVS[day]) * shares_count[
+                day]
 
-        N[t][unlocked] = equity_before_buy[t][unlocked] * WEIGHT[t][unlocked] / OPEN[t][unlocked]
-        dN = N[t]
-        if t > 0:
-            dN = dN - N[t - 1]
-        S = SLIPPAGE[t] * np.abs(dN)  # slippage for this step
-        equity_after_buy[t] = equity_before_buy[t] - S
+        shares_count[day][tradeable_assets] = equity_before_buy[day][tradeable_assets] * WEIGHT[day][tradeable_assets] / \
+                                              OPEN[day][tradeable_assets]
+        dN = shares_count[day]
+        if day > 0:
+            dN = dN - shares_count[day - 1]
+        step_slippage = SLIPPAGE[day] * np.abs(dN)
+        equity_after_buy[day] = equity_before_buy[day] - step_slippage
 
-        if ROLL is not None and t > 0:
-            pN = np.where(np.sign(N[t]) == np.sign(N[t - 1]), np.minimum(np.abs(N[t]), np.abs(N[t - 1])), 0)
-            R = np.sign(N[t]) * pN * ROLL[t] + pN * ROLL_SLIPPAGE[t]
-            equity_after_buy[t] -= R
+        if ROLL is not None and day > 0:
+            partial_shares = np.where(np.sign(shares_count[day]) == np.sign(shares_count[day - 1]),
+                                      np.minimum(np.abs(shares_count[day]), np.abs(shares_count[day - 1])), 0)
+            roll_costs = np.sign(shares_count[day]) * partial_shares * ROLL[day] + partial_shares * ROLL_SLIPPAGE[day]
+            equity_after_buy[day] -= roll_costs
 
-        equity_tonight[t] = equity_after_buy[t] + (CLOSE[t] - OPEN[t]) * N[t]
+        equity_tonight[day] = equity_after_buy[day] + (CLOSE[day] - OPEN[day]) * shares_count[day]
 
-        locked = np.logical_not(unlocked)
-        if t == 0:
-            equity_before_buy[0][locked] = 1
-            equity_after_buy[0][locked] = 1
-            equity_tonight[0][locked] = 1
-            N[0][locked] = 0
+        non_tradeable_assets = np.logical_not(tradeable_assets)
+        if day == 0:
+            equity_before_buy[0][non_tradeable_assets] = 1
+            equity_after_buy[0][non_tradeable_assets] = 1
+            equity_tonight[0][non_tradeable_assets] = 1
+            shares_count[0][non_tradeable_assets] = 0
         else:
-            N[t][locked] = N[t - 1][locked]
-            equity_after_buy[t][locked] = equity_after_buy[t - 1][locked]
-            equity_before_buy[t][locked] = equity_before_buy[t - 1][locked]
-            equity_tonight[t][locked] = equity_tonight[t - 1][locked]
+            shares_count[day][non_tradeable_assets] = shares_count[day - 1][non_tradeable_assets]
+            equity_after_buy[day][non_tradeable_assets] = equity_after_buy[day - 1][non_tradeable_assets]
+            equity_before_buy[day][non_tradeable_assets] = equity_before_buy[day - 1][non_tradeable_assets]
+            equity_tonight[day][non_tradeable_assets] = equity_tonight[day - 1][non_tradeable_assets]
 
     E = equity_tonight
-    # Ep = np.roll(E, 1, axis=0)
     Ep = E.copy()
     for i in range(1, Ep.shape[0]):
         Ep[i] = E[i - 1]
@@ -167,49 +173,54 @@ def calc_relative_return_np_per_asset(WEIGHT, UNLOCKED, OPEN, CLOSE, SLIPPAGE, D
 
 @numba.njit
 def calc_relative_return_np(WEIGHT, UNLOCKED, OPEN, CLOSE, SLIPPAGE, DIVS, ROLL, ROLL_SLIPPAGE):
-    N = np.zeros(WEIGHT.shape)  # shares count
+    shares_count = np.zeros(WEIGHT.shape)
 
     equity_before_buy = np.zeros(WEIGHT.shape[0])
     equity_operable_before_buy = np.zeros(WEIGHT.shape[0])
     equity_after_buy = np.zeros(WEIGHT.shape[0])
     equity_tonight = np.zeros(WEIGHT.shape[0])
 
-    for t in range(WEIGHT.shape[0]):
-        unlocked = UNLOCKED[t]  # available for trading
-        locked = np.logical_not(unlocked)
+    for day in range(WEIGHT.shape[0]):
+        tradeable_assets = UNLOCKED[day]
+        non_tradeable_assets = np.logical_not(tradeable_assets)
 
-        if t == 0:
+        if day == 0:
             equity_before_buy[0] = 1
-            N[0] = 0
+            shares_count[0] = 0
         else:
-            N[t] = N[t - 1]
-            equity_before_buy[t] = equity_after_buy[t - 1] + np.nansum((OPEN[t] - OPEN[t - 1] + DIVS[t]) * N[t])
+            shares_count[day] = shares_count[day - 1]
+            equity_before_buy[day] = equity_after_buy[day - 1] + np.nansum(
+                (OPEN[day] - OPEN[day - 1] + DIVS[day]) * shares_count[day])
 
-        w_sum = np.nansum(np.abs(WEIGHT[t]))
+        w_sum = np.nansum(np.abs(WEIGHT[day]))
         w_free_cash = max(1, w_sum) - w_sum
-        w_unlocked = np.nansum(np.abs(WEIGHT[t][unlocked]))
+        w_unlocked = np.nansum(np.abs(WEIGHT[day][tradeable_assets]))
         w_operable = w_unlocked + w_free_cash
 
-        equity_operable_before_buy[t] = equity_before_buy[t] - np.nansum(OPEN[t][locked] * np.abs(N[t][locked]))
+        equity_operable_before_buy[day] = equity_before_buy[day] - np.nansum(
+            OPEN[day][non_tradeable_assets] * np.abs(shares_count[day][non_tradeable_assets]))
 
         if w_operable < EPS:
-            equity_after_buy[t] = equity_before_buy[t]
+            equity_after_buy[day] = equity_before_buy[day]
         else:
-            N[t][unlocked] = equity_operable_before_buy[t] * WEIGHT[t][unlocked] / (w_operable * OPEN[t][unlocked])
-            dN = N[t][unlocked]
-            if t > 0:
-                dN = dN - N[t - 1][unlocked]
-            S = np.nansum(SLIPPAGE[t][unlocked] * np.abs(dN))  # slippage for this step
-            equity_after_buy[t] = equity_before_buy[t] - S
+            shares_count[day][tradeable_assets] = equity_operable_before_buy[day] * WEIGHT[day][tradeable_assets] / (
+                    w_operable * OPEN[day][tradeable_assets])
+            dN = shares_count[day][tradeable_assets]
+            if day > 0:
+                dN = dN - shares_count[day - 1][tradeable_assets]
+            step_slippage = np.nansum(SLIPPAGE[day][tradeable_assets] * np.abs(dN))
+            equity_after_buy[day] = equity_before_buy[day] - step_slippage
 
-        if ROLL is not None and t > 0:
-            pN = np.where(np.sign(N[t]) == np.sign(N[t - 1]), np.minimum(np.abs(N[t]), np.abs(N[t - 1])), 0)
-            R = np.sign(N[t]) * pN * ROLL[t] + pN * ROLL_SLIPPAGE[t]
-            equity_after_buy[t] -= np.nansum(R)
+        if ROLL is not None and day > 0:
+            partial_shares = np.where(np.sign(shares_count[day]) == np.sign(shares_count[day - 1]),
+                                      np.minimum(np.abs(shares_count[day]), np.abs(shares_count[day - 1])), 0)
+            roll_costs = np.sign(shares_count[day]) * partial_shares * ROLL[day] + partial_shares * ROLL_SLIPPAGE[day]
+            equity_after_buy[day] -= np.nansum(roll_costs)
 
-        equity_tonight[t] = equity_after_buy[t] + np.nansum((CLOSE[t] - OPEN[t]) * N[t])
-        # Update the number of shares for locked assets
-        N[t][locked] = 0
+        equity_tonight[day] = equity_after_buy[day] + np.nansum((CLOSE[day] - OPEN[day]) * shares_count[day])
+
+        # Set shares count to 0 for assets without a price. Reasons: company could've ceased to exist, been acquired, or there's a provider error
+        shares_count[day][non_tradeable_assets] = 0
 
     E = equity_tonight
     Ep = np.roll(E, 1)

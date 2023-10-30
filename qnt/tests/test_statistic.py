@@ -1,3 +1,4 @@
+import sys
 import unittest
 import pandas as pd
 import xarray as xr
@@ -8,299 +9,902 @@ import os
 
 os.environ['API_KEY'] = "default"
 
-import qnt.data    as qndata
-import qnt.stats   as qnstats
+import qnt.data as qndata
+import qnt.stats as qnstats
+
+dir2_path = os.path.dirname(os.path.abspath(__file__))
+
+dir1_path = os.path.join(dir2_path, 'data')
+
+sys.path.append(dir1_path)
+
+import stats_data
+
+EXPECTED_JSON_SCHEMA = {
+    "base": {"fields": [{"name": "time", "type": "datetime"}, {"name": "BTC", "type": "number"}],
+             "primaryKey": ["time"], "pandas_version": "0.20.0"},
+    "base_values": {"fields": [{"name": "time", "type": "datetime"}, {"name": "values", "type": "number"}],
+                    "primaryKey": ["time"], "pandas_version": "0.20.0"},
+    "statistic": {'fields': [{'name': 'time', 'type': 'datetime'},
+                             {'name': 'equity', 'type': 'number'},
+                             {'name': 'relative_return', 'type': 'number'},
+                             {'name': 'volatility', 'type': 'number'},
+                             {'name': 'underwater', 'type': 'number'},
+                             {'name': 'max_drawdown', 'type': 'number'},
+                             {'name': 'sharpe_ratio', 'type': 'number'},
+                             {'name': 'mean_return', 'type': 'number'},
+                             {'name': 'bias', 'type': 'number'},
+                             {'name': 'instruments', 'type': 'number'},
+                             {'name': 'avg_turnover', 'type': 'number'},
+                             {'name': 'avg_holding_time', 'type': 'number'}],
+                  'pandas_version': '0.20.0',
+                  'primaryKey': ['time']},
+}
+
+POINTS_PER_YEAR = 365
 
 
-class Fields:
-    OPEN = "open"
-    LOW = "low"
-    HIGH = "high"
-    CLOSE = "close"
-    VOL = "vol"
-    DIVS = "divs"
-    SPLIT = "split"
-    SPLIT_CUMPROD = "split_cumprod"
-    IS_LIQUID = 'is_liquid'
+def calculate_relative_return(data, portfolio_history, per_asset=False):
+    return qnstats.calc_relative_return(
+        data, portfolio_history, slippage_factor=0.0,
+        roll_slippage_factor=0.0, per_asset=per_asset,
+        points_per_year=POINTS_PER_YEAR
+    )
 
 
-f = Fields
+def generate_stat_head(dataframe, head=20, tail=8):
+    stat_head = dataframe.head(head).tail(tail).to_json(orient="table")
+    return json.loads(stat_head)
 
 
-class Dimensions:
-    TIME = 'time'
-    FIELD = 'field'
-    ASSET = 'asset'
+def get_rr_dataframe_and_json(data, portfolio_history, per_asset=False, head=20, tail=8):
+    rr = calculate_relative_return(data, portfolio_history, per_asset=per_asset)
+    rr_df = rr.to_pandas()
+    stat_head = generate_stat_head(rr_df, head=head, tail=tail)
+    return rr_df, stat_head
 
 
-ds = Dimensions
-
-dims = (ds.FIELD, ds.TIME, ds.ASSET)
-
-
-def get_base_df():
-    # def get_base_df():
-    #     tail = 100
-    #     futures = qndata.cryptofutures_load_data(tail=tail, dims=('time', 'field', 'asset'))
-    #     filler = futures.sel(asset=["BTC"])
-    #     display(filler.sel(field="close"))
-    #     prices_pandas = filler.sel(field="close").to_pandas()
-    #     prices_pandas["open"] = range(1, prices_pandas.shape[0] + 1, 1)
-    #     prices_pandas["close"] = range(2, prices_pandas.shape[0] + 2, 1)
-    #     prices_pandas["low"] = prices_pandas["open"]
-    #     prices_pandas["high"] = prices_pandas["close"]
-    #     prices_pandas["vol"] = 1000
-    #     prices_pandas["divs"] = 0
-    #     prices_pandas["split"] = 0
-    #     prices_pandas["split_cumprod"] = 0
-    #     prices_pandas["is_liquid"] = 1
-    #     del prices_pandas["BTC"]
-    #
-    #     result = prices_pandas.to_json(orient="table")
-    #
-    #     display(result)
-    #
-    # get_base_df()
-
-    try_result = {"schema": {"fields": [{"name": "time", "type": "datetime"}, {"name": "open", "type": "integer"},
-                                        {"name": "close", "type": "integer"}, {"name": "low", "type": "integer"},
-                                        {"name": "high", "type": "integer"}, {"name": "vol", "type": "integer"},
-                                        {"name": "divs", "type": "integer"}, {"name": "split", "type": "integer"},
-                                        {"name": "split_cumprod", "type": "integer"},
-                                        {"name": "is_liquid", "type": "integer"}], "primaryKey": ["time"],
-                             "pandas_version": "0.20.0"}, "data": [
-        {"time": "2021-01-30T00:00:00.000Z", "open": 1, "close": 2, "low": 1, "high": 2, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-01-31T00:00:00.000Z", "open": 2, "close": 3, "low": 2, "high": 3, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-01T00:00:00.000Z", "open": 3, "close": 4, "low": 3, "high": 4, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-02T00:00:00.000Z", "open": 4, "close": 5, "low": 4, "high": 5, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-03T00:00:00.000Z", "open": 5, "close": 6, "low": 5, "high": 6, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-04T00:00:00.000Z", "open": 6, "close": 7, "low": 6, "high": 7, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-05T00:00:00.000Z", "open": 7, "close": 8, "low": 7, "high": 8, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-06T00:00:00.000Z", "open": 8, "close": 9, "low": 8, "high": 9, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-07T00:00:00.000Z", "open": 9, "close": 10, "low": 9, "high": 10, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-08T00:00:00.000Z", "open": 10, "close": 11, "low": 10, "high": 11, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-09T00:00:00.000Z", "open": 11, "close": 12, "low": 11, "high": 12, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-10T00:00:00.000Z", "open": 12, "close": 13, "low": 12, "high": 13, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-11T00:00:00.000Z", "open": 13, "close": 14, "low": 13, "high": 14, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-12T00:00:00.000Z", "open": 14, "close": 15, "low": 14, "high": 15, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-13T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-14T00:00:00.000Z", "open": 16, "close": 17, "low": 16, "high": 17, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-15T00:00:00.000Z", "open": 17, "close": 18, "low": 17, "high": 18, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-16T00:00:00.000Z", "open": 18, "close": 19, "low": 18, "high": 19, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-17T00:00:00.000Z", "open": 19, "close": 20, "low": 19, "high": 20, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-18T00:00:00.000Z", "open": 20, "close": 21, "low": 20, "high": 21, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-19T00:00:00.000Z", "open": 21, "close": 22, "low": 21, "high": 22, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-20T00:00:00.000Z", "open": 22, "close": 23, "low": 22, "high": 23, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-21T00:00:00.000Z", "open": 23, "close": 24, "low": 23, "high": 24, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-22T00:00:00.000Z", "open": 24, "close": 25, "low": 24, "high": 25, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-23T00:00:00.000Z", "open": 25, "close": 26, "low": 25, "high": 26, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-24T00:00:00.000Z", "open": 26, "close": 27, "low": 26, "high": 27, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-25T00:00:00.000Z", "open": 27, "close": 28, "low": 27, "high": 28, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-26T00:00:00.000Z", "open": 28, "close": 29, "low": 28, "high": 29, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-27T00:00:00.000Z", "open": 29, "close": 30, "low": 29, "high": 30, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-02-28T00:00:00.000Z", "open": 30, "close": 31, "low": 30, "high": 31, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-01T00:00:00.000Z", "open": 31, "close": 32, "low": 31, "high": 32, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-02T00:00:00.000Z", "open": 32, "close": 33, "low": 32, "high": 33, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-03T00:00:00.000Z", "open": 33, "close": 34, "low": 33, "high": 34, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-04T00:00:00.000Z", "open": 34, "close": 35, "low": 34, "high": 35, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-05T00:00:00.000Z", "open": 35, "close": 36, "low": 35, "high": 36, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-06T00:00:00.000Z", "open": 36, "close": 37, "low": 36, "high": 37, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-07T00:00:00.000Z", "open": 37, "close": 38, "low": 37, "high": 38, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-08T00:00:00.000Z", "open": 38, "close": 39, "low": 38, "high": 39, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-09T00:00:00.000Z", "open": 39, "close": 40, "low": 39, "high": 40, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-10T00:00:00.000Z", "open": 40, "close": 41, "low": 40, "high": 41, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-11T00:00:00.000Z", "open": 41, "close": 42, "low": 41, "high": 42, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-12T00:00:00.000Z", "open": 42, "close": 43, "low": 42, "high": 43, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-13T00:00:00.000Z", "open": 43, "close": 44, "low": 43, "high": 44, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-14T00:00:00.000Z", "open": 44, "close": 45, "low": 44, "high": 45, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-15T00:00:00.000Z", "open": 45, "close": 46, "low": 45, "high": 46, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-16T00:00:00.000Z", "open": 46, "close": 47, "low": 46, "high": 47, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-17T00:00:00.000Z", "open": 47, "close": 48, "low": 47, "high": 48, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-18T00:00:00.000Z", "open": 48, "close": 49, "low": 48, "high": 49, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-19T00:00:00.000Z", "open": 49, "close": 50, "low": 49, "high": 50, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-20T00:00:00.000Z", "open": 50, "close": 51, "low": 50, "high": 51, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-21T00:00:00.000Z", "open": 51, "close": 52, "low": 51, "high": 52, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-22T00:00:00.000Z", "open": 52, "close": 53, "low": 52, "high": 53, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-23T00:00:00.000Z", "open": 53, "close": 54, "low": 53, "high": 54, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-24T00:00:00.000Z", "open": 54, "close": 55, "low": 54, "high": 55, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-25T00:00:00.000Z", "open": 55, "close": 56, "low": 55, "high": 56, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-26T00:00:00.000Z", "open": 56, "close": 57, "low": 56, "high": 57, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-27T00:00:00.000Z", "open": 57, "close": 58, "low": 57, "high": 58, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-28T00:00:00.000Z", "open": 58, "close": 59, "low": 58, "high": 59, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-29T00:00:00.000Z", "open": 59, "close": 60, "low": 59, "high": 60, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-30T00:00:00.000Z", "open": 60, "close": 61, "low": 60, "high": 61, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-03-31T00:00:00.000Z", "open": 61, "close": 62, "low": 61, "high": 62, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-01T00:00:00.000Z", "open": 62, "close": 63, "low": 62, "high": 63, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-02T00:00:00.000Z", "open": 63, "close": 64, "low": 63, "high": 64, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-03T00:00:00.000Z", "open": 64, "close": 65, "low": 64, "high": 65, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-04T00:00:00.000Z", "open": 65, "close": 66, "low": 65, "high": 66, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-05T00:00:00.000Z", "open": 66, "close": 67, "low": 66, "high": 67, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-06T00:00:00.000Z", "open": 67, "close": 68, "low": 67, "high": 68, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-07T00:00:00.000Z", "open": 68, "close": 69, "low": 68, "high": 69, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-08T00:00:00.000Z", "open": 69, "close": 70, "low": 69, "high": 70, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-09T00:00:00.000Z", "open": 70, "close": 71, "low": 70, "high": 71, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-10T00:00:00.000Z", "open": 71, "close": 72, "low": 71, "high": 72, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-11T00:00:00.000Z", "open": 72, "close": 73, "low": 72, "high": 73, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-12T00:00:00.000Z", "open": 73, "close": 74, "low": 73, "high": 74, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-13T00:00:00.000Z", "open": 74, "close": 75, "low": 74, "high": 75, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-14T00:00:00.000Z", "open": 75, "close": 76, "low": 75, "high": 76, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-15T00:00:00.000Z", "open": 76, "close": 77, "low": 76, "high": 77, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-16T00:00:00.000Z", "open": 77, "close": 78, "low": 77, "high": 78, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-17T00:00:00.000Z", "open": 78, "close": 79, "low": 78, "high": 79, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-18T00:00:00.000Z", "open": 79, "close": 80, "low": 79, "high": 80, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-19T00:00:00.000Z", "open": 80, "close": 81, "low": 80, "high": 81, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-20T00:00:00.000Z", "open": 81, "close": 82, "low": 81, "high": 82, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-21T00:00:00.000Z", "open": 82, "close": 83, "low": 82, "high": 83, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-22T00:00:00.000Z", "open": 83, "close": 84, "low": 83, "high": 84, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-23T00:00:00.000Z", "open": 84, "close": 85, "low": 84, "high": 85, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-24T00:00:00.000Z", "open": 85, "close": 86, "low": 85, "high": 86, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-25T00:00:00.000Z", "open": 86, "close": 87, "low": 86, "high": 87, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-26T00:00:00.000Z", "open": 87, "close": 88, "low": 87, "high": 88, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-27T00:00:00.000Z", "open": 88, "close": 89, "low": 88, "high": 89, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-28T00:00:00.000Z", "open": 89, "close": 90, "low": 89, "high": 90, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-29T00:00:00.000Z", "open": 90, "close": 91, "low": 90, "high": 91, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-04-30T00:00:00.000Z", "open": 91, "close": 92, "low": 91, "high": 92, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-05-01T00:00:00.000Z", "open": 92, "close": 93, "low": 92, "high": 93, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-05-02T00:00:00.000Z", "open": 93, "close": 94, "low": 93, "high": 94, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-05-03T00:00:00.000Z", "open": 94, "close": 95, "low": 94, "high": 95, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-05-04T00:00:00.000Z", "open": 95, "close": 96, "low": 95, "high": 96, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-05-05T00:00:00.000Z", "open": 96, "close": 97, "low": 96, "high": 97, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-05-06T00:00:00.000Z", "open": 97, "close": 98, "low": 97, "high": 98, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-05-07T00:00:00.000Z", "open": 98, "close": 99, "low": 98, "high": 99, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-05-08T00:00:00.000Z", "open": 99, "close": 100, "low": 99, "high": 100, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1},
-        {"time": "2021-05-09T00:00:00.000Z", "open": 100, "close": 101, "low": 100, "high": 101, "vol": 1000, "divs": 0,
-         "split": 0, "split_cumprod": 0, "is_liquid": 1}
-    ]}
-    columns = [Dimensions.TIME, f.OPEN, f.CLOSE, f.LOW, f.HIGH, f.VOL, f.DIVS, f.SPLIT, f.SPLIT_CUMPROD,
-               f.IS_LIQUID]
-    rows = try_result['data']
-    for r in rows:
-        r['time'] = np.datetime64(r['time'])
-    pandas = pd.DataFrame(columns=columns, data=rows)
-    pandas.set_index(Dimensions.TIME, inplace=True)
-    prices_array = pandas.to_xarray().to_array(Dimensions.FIELD)
-    prices_array.name = "BTC_TEST"
-    prices_array_r = xr.concat([prices_array], pd.Index(['BTC'], name='asset'))
-    return prices_array_r
+def load_data_and_create_data_array(filename, dims, transpose_order):
+    ds = xr.open_dataset(filename).load()
+    dataset_name = list(ds.data_vars)[0]
+    values = ds[dataset_name].transpose(*transpose_order).values
+    coords = {dim: ds[dim].values for dim in dims}
+    return xr.DataArray(values, dims=dims, coords=coords)
 
 
 class TestBaseStatistic(unittest.TestCase):
 
+    def test_relative_return_border_case_per_asset(self):
+        dir = os.path.abspath(os.curdir)
+
+        dims = ['time', 'asset']
+        weights = load_data_and_create_data_array(f"{dir}/data/weights_2022_02_09_no_short.nc", dims, dims)
+
+        dims = ['field', 'time', 'asset']
+        data = load_data_and_create_data_array(f"{dir}/data/data_2022_01_09.nc", dims, dims)
+
+        assets = data.asset.values
+        for asset in assets:
+            if asset in ['NAS:WBD', 'NAS:XLNX']:
+                continue
+
+            asset_data = data.sel(asset=[asset])
+            asset_weights = weights.sel(asset=[asset])
+
+            asset_data_pd = asset_data.sel(field='close').to_pandas()
+            asset_weights_pd = asset_weights.to_pandas()
+
+            is_liquid = asset_data.sel(field="is_liquid") * asset_weights
+
+            portfolio_history = qnstats.output_normalize(is_liquid, per_asset=False)
+            rr_df, stat_head = get_rr_dataframe_and_json(asset_data, portfolio_history)
+
+            is_liquid_slice = is_liquid.sel(time=slice("2022-02-10", None))
+
+            portfolio_history_slice = qnstats.output_normalize(is_liquid_slice, per_asset=False)
+            rr_df_slice, stat_head_slice = get_rr_dataframe_and_json(asset_data, portfolio_history_slice,
+                                                                     per_asset=False, head=19, tail=8)
+            print(asset)
+            self.assertEqual(stat_head, stat_head_slice)
+
+    def test_relative_return_border_case(self):
+        dir = os.path.abspath(os.curdir)
+
+        dims = ['time', 'asset']
+        weights = load_data_and_create_data_array(f"{dir}/data/weights_2022_02_09_no_short.nc", dims, dims)
+
+        dims = ['field', 'time', 'asset']
+        data = load_data_and_create_data_array(f"{dir}/data/data_2022_01_09.nc", dims, dims)
+
+        assets = data.asset.values
+        # filtered_assets = [asset for asset in assets if asset not in ['NAS:WBD', 'NAS:XLNX']]
+        filtered_assets = assets
+
+        data = data.sel(asset=filtered_assets)
+        weights = weights.sel(asset=filtered_assets)
+
+        is_liquid = data.sel(field="is_liquid") * weights
+
+        portfolio_history = qnstats.output_normalize(is_liquid, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        is_liquid_slice = is_liquid.sel(time=slice("2022-02-10", None))
+
+        portfolio_history_slice = qnstats.output_normalize(is_liquid_slice, per_asset=False)
+        rr_df_slice, stat_head_slice = get_rr_dataframe_and_json(data, portfolio_history_slice,
+                                                                 per_asset=False, head=19, tail=8)
+
+        self.assertEqual(stat_head, stat_head_slice)
+
+    def test_relative_return_no_liquid(self):
+        data = stats_data.get_base_df()
+        is_liquid = data.sel(field="is_liquid")
+
+        portfolio_history = qnstats.output_normalize(is_liquid, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0625},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0588235294},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        is_liquid.loc[dict(time='2021-02-15T00:00:00.000Z', asset='BTC')] = 0
+
+        portfolio_history = qnstats.output_normalize(is_liquid, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0625},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0588235294},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+    def test_stats_border_case(self):
+        data = stats_data.get_xr_with_NaN()
+        one = data.sel(field="close") - data.sel(field="close") + 1
+
+        strategy_full = one
+        strategy_eth = one.sel(asset=['ETH'])
+
+        statsETH_full = qnstats.calc_stat(data.sel(asset=['ETH']), strategy_full)
+        statsETH_simple = qnstats.calc_stat(data.sel(asset=['ETH']), strategy_eth)
+
+        stats_ETH_full_ = statsETH_full.to_pandas().tail(1).to_json(orient="table")
+        stats_ETH_simple_ = statsETH_simple.to_pandas().tail(1).to_json(orient="table")
+        # This happens because after normalization, the weights for ETH decrease by half.
+        self.assertEqual(
+            {'data': [{'avg_holding_time': 8.0,
+                       'avg_turnover': 0.1054668795,
+                       'bias': 0.0,
+                       'equity': 1.0232916667,
+                       'instruments': 1.0,
+                       'max_drawdown': -0.0323101777,
+                       'mean_return': 0.5222631434,
+                       'relative_return': 0.0,
+                       'sharpe_ratio': 2.3784078181,
+                       'time': '2021-02-18T00:00:00.000Z',
+                       'underwater': -0.0081179321,
+                       'volatility': 0.2195851945}],
+             'schema': EXPECTED_JSON_SCHEMA['statistic']}, json.loads(stats_ETH_full_))
+
+        self.assertEqual(
+            {'data': [{'avg_holding_time': 8.0,
+                       'avg_turnover': 0.2093873416,
+                       'bias': 0.0,
+                       'equity': 1.0465,
+                       'instruments': 1.0,
+                       'max_drawdown': -0.0626959248,
+                       'mean_return': 1.2921392413,
+                       'relative_return': 0.0,
+                       'sharpe_ratio': 2.9783175293,
+                       'time': '2021-02-18T00:00:00.000Z',
+                       'underwater': -0.015830721,
+                       'volatility': 0.4338487178}],
+             'schema': EXPECTED_JSON_SCHEMA['statistic']}, json.loads(stats_ETH_simple_))
+
+    def test_relative_return_NaN(self):
+        data = stats_data.get_xr_with_NaN()
+        one = data.sel(field="close") - data.sel(field="close") + 1
+
+        one = one.fillna(1)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': -0.0625},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.0}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667,
+                                    'ETH': 0.0666666667,
+                                    'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.1875, 'ETH': 0.1875, 'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789,
+                                    'ETH': 0.0526315789,
+                                    'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'},
+                                                {'name': 'ETH', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0333333333,
+                                    'ETH': 0.0333333333,
+                                    'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.0977822581,
+                                    'ETH': 0.0977822581,
+                                    'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0263157895,
+                                    'ETH': 0.0263157895,
+                                    'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'},
+                                                {'name': 'ETH', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+    def test_relative_return_NaN_one(self):
+        data_two = stats_data.get_xr_with_NaN()
+        data = data_two.sel(asset=['BTC'])
+        one = data.sel(field="close") - data.sel(field="close") + 1
+
+        one = one.fillna(1)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': -0.0625},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.0}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667, 'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.1875, 'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789, 'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+    def test_relative_return_complex(self):
+        data = stats_data.get_base_df()
+        one = data.sel(field="close") - data.sel(field="close") + 1
+
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', asset='BTC', field='open')] = 4
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0625},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': -0.5709342561},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+    def test_relative_return_one(self):
+        data_two = stats_data.get_base_df()
+        data = data_two.sel(asset=['BTC'])
+        one = data.sel(field="close") - data.sel(field="close") + 1
+
+        one = one.fillna(1)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0625},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0588235294},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667, 'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': 0.0625, 'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': 0.0588235294, 'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.0555555556, 'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789, 'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+        data_slice = data.sel(time=slice("2021-01-31", None))
+        one_slice = one.sel(time=slice('2021-01-31', None))
+
+        portfolio_history = qnstats.output_normalize(one_slice, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data_slice, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0625},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0588235294},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05},
+                                   {'time': '2021-02-19T00:00:00.000Z', 'values': 0.0476190476}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+    def test_relative_return_one_border_case(self):
+        data_two = stats_data.get_xr_correct()
+        data = data_two.sel(asset=['BTC'])
+
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='open')] = 15
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='close')] = 16
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='low')] = 15
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='high')] = 16
+
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='open')] = 15
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='close')] = 16
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='low')] = 15
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='high')] = 16
+        #
+        # {"time": "2021-02-13T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
+        #  "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        # {"time": "2021-02-14T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
+        #  "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        # {"time": "2021-02-15T00:00:00.000Z", "open": 15, "close": 16, "low": 15, "high": 16, "vol": 1000, "divs": 0,
+        #  "split": 0, "split_cumprod": 0, "is_liquid": 1},
+        # {"time": "2021-02-16T00:00:00.000Z", "open": 18, "close": 19, "low": 18, "high": 19, "vol": 1000, "divs": 0,
+        #  "split": 0, "split_cumprod": 0, "is_liquid": 1},
+
+        one = data.sel(field="close") - data.sel(field="close") + 1
+        one = one.fillna(1)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667, 'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': -0.00390625, 'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.1797385621, 'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789, 'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': -0.00390625},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.1797385621},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='open')] = 18
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='close')] = 19
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='low')] = 18
+        data.loc[dict(time='2021-02-14T00:00:00.000Z', field='high')] = 19
+
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='open')] = 18
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='close')] = 19
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='low')] = 18
+        data.loc[dict(time='2021-02-15T00:00:00.000Z', field='high')] = 19
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.1875},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': -0.0027700831},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667, 'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': 0.1875, 'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': -0.0027700831, 'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789, 'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+    def test_relative_return_two(self):
+        data = stats_data.get_xr_correct()
+        one = data.sel(field="close") - data.sel(field="close") + 1
+        one = one.fillna(1)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=False)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history)
+
+        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
+                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
+                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0546875},
+                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0588235294},
+                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
+                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
+                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
+                          'schema': EXPECTED_JSON_SCHEMA['base_values']}, stat_head)
+
+        portfolio_history = qnstats.output_normalize(one, per_asset=True)
+        rr_df, stat_head = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+
+        self.assertEqual({'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                                   {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                                   {'BTC': 0.0666666667,
+                                    'ETH': 0.0666666667,
+                                    'time': '2021-02-13T00:00:00.000Z'},
+                                   {'BTC': 0.0546875,
+                                    'ETH': 0.0546875,
+                                    'time': '2021-02-14T00:00:00.000Z'},
+                                   {'BTC': 0.0588235294,
+                                    'ETH': 0.0588235294,
+                                    'time': '2021-02-15T00:00:00.000Z'},
+                                   {'BTC': 0.0555555556,
+                                    'ETH': 0.0555555556,
+                                    'time': '2021-02-16T00:00:00.000Z'},
+                                   {'BTC': 0.0526315789,
+                                    'ETH': 0.0526315789,
+                                    'time': '2021-02-17T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'ETH': 0.05, 'time': '2021-02-18T00:00:00.000Z'}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'BTC', 'type': 'number'},
+                                                {'name': 'ETH', 'type': 'number'}],
+                                     'pandas_version': '0.20.0',
+                                     'primaryKey': ['time']}}, stat_head)
+
+    def test_slippage_factor(self):
+        def get_slippage_json(data, head):
+            slippage = qnstats.calc_slippage(data,
+                                             period_days=1,
+                                             fract=0.05,
+                                             points_per_year=365)
+            r = slippage.to_pandas().head(head).to_json(orient="table")
+            return json.loads(r)
+
+        data = stats_data.get_base_df()
+
+        r = get_slippage_json(data, 5)
+
+        self.assertEqual({'data': [{'BTC': None, 'time': '2021-01-30T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-01-31T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-02-01T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-02-02T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-02-03T00:00:00.000Z'}],
+                          'schema': EXPECTED_JSON_SCHEMA['base']}, r)
+
+        data.loc[dict(time='2021-01-31T00:00:00.000Z', asset='BTC', field='close')] = 4
+        data.loc[dict(time='2021-01-31T00:00:00.000Z', asset='BTC', field='high')] = 4
+
+        r = get_slippage_json(data, 3)
+
+        self.assertEqual({'data': [{'BTC': None, 'time': '2021-01-30T00:00:00.000Z'},
+                                   {'BTC': 0.1, 'time': '2021-01-31T00:00:00.000Z'},
+                                   {'BTC': 0.05, 'time': '2021-02-01T00:00:00.000Z'}],
+                          'schema': EXPECTED_JSON_SCHEMA['base']}, r)
+
+    def test_statistic(self):
+        data = stats_data.get_base_df()
+        buy_and_hold = data.sel(field="close") - data.sel(field="close") + 1
+
+        stat = qnstats.calc_stat(data, buy_and_hold)
+        stat_head_df = stat.to_pandas().head(20)
+        stat_head = stat_head_df.tail(8).to_json(orient="table")
+        self.assertEqual({'data': [{'avg_holding_time': None,
+                                    'avg_turnover': 0.2387085137,
+                                    'bias': 1.0,
+                                    'equity': 1.0,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 0.0,
+                                    'relative_return': 0.0,
+                                    'sharpe_ratio': None,
+                                    'time': '2021-02-11T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.2271524111,
+                                    'bias': 1.0,
+                                    'equity': 1.0,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 0.0,
+                                    'relative_return': 0.0,
+                                    'sharpe_ratio': None,
+                                    'time': '2021-02-12T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.2125164554,
+                                    'bias': 1.0,
+                                    'equity': 1.0633333333,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 3.4561119146,
+                                    'relative_return': 0.0633333333,
+                                    'sharpe_ratio': 11.4508113541,
+                                    'time': '2021-02-13T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.301822448},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1994798535,
+                                    'bias': 1.0,
+                                    'equity': 1.12978125,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 15.1783379265,
+                                    'relative_return': 0.0624902038,
+                                    'sharpe_ratio': 38.1834983226,
+                                    'time': '2021-02-14T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.3975104062},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1879499944,
+                                    'bias': 1.0,
+                                    'equity': 1.19623894,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 45.8594135909,
+                                    'relative_return': 0.0588235023,
+                                    'sharpe_ratio': 102.2394822568,
+                                    'time': '2021-02-15T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.4485489615},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1776803267,
+                                    'bias': 1.0,
+                                    'equity': 1.2626966588,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 112.2711331786,
+                                    'relative_return': 0.0555555555,
+                                    'sharpe_ratio': 234.9847755271,
+                                    'time': '2021-02-16T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.4777804559},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1684749293,
+                                    'bias': 1.0,
+                                    'equity': 1.3291543776,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 235.5641731673,
+                                    'relative_return': 0.0526315789,
+                                    'sharpe_ratio': 476.5440779962,
+                                    'time': '2021-02-17T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.4943177012},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1601764962,
+                                    'bias': 1.0,
+                                    'equity': 1.3956120965,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 437.4865053257,
+                                    'relative_return': 0.05,
+                                    'sharpe_ratio': 869.9875335492,
+                                    'time': '2021-02-18T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.5028652578}],
+                          'schema': EXPECTED_JSON_SCHEMA['statistic']}, json.loads(stat_head))
+
+        stat_tail = stat.to_pandas().tail().to_json(orient="table")
+        self.assertEqual({'data': [{'avg_holding_time': None,
+                                    'avg_turnover': 0.0337705883,
+                                    'bias': 1.0,
+                                    'equity': 6.4463987315,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 1193.2391460706,
+                                    'relative_return': 0.0104166667,
+                                    'sharpe_ratio': 4237.1617981522,
+                                    'time': '2021-05-05T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.2816128349},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.0334235337,
+                                    'bias': 1.0,
+                                    'equity': 6.5128564504,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 1152.7982974101,
+                                    'relative_return': 0.0103092784,
+                                    'sharpe_ratio': 4106.228531354,
+                                    'time': '2021-05-06T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.2807438233},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.0330835398,
+                                    'bias': 1.0,
+                                    'equity': 6.5793141693,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 1114.0783627083,
+                                    'relative_return': 0.0102040816,
+                                    'sharpe_ratio': 3980.4004956444,
+                                    'time': '2021-05-07T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.279891022},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.0327503934,
+                                    'bias': 1.0,
+                                    'equity': 6.6457718882,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 1076.9956058566,
+                                    'relative_return': 0.0101010101,
+                                    'sharpe_ratio': 3859.4543277577,
+                                    'time': '2021-05-08T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.2790538544},
+                                   {'avg_holding_time': 98.0,
+                                    'avg_turnover': 0.0324238895,
+                                    'bias': 1.0,
+                                    'equity': 6.712229607,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 1041.4706461667,
+                                    'relative_return': 0.01,
+                                    'sharpe_ratio': 3743.1765832705,
+                                    'time': '2021-05-09T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.27823177}],
+                          'schema': EXPECTED_JSON_SCHEMA['statistic']}, json.loads(stat_tail))
+
+    def test_cryptofutures(self):
+        d = stats_data.get_cripto_futures()
+        buy_and_hold = d.sel(field="close") - d.sel(field="close") + 1
+        stat = qnstats.calc_stat(d, buy_and_hold)
+        stat_head_df = stat.to_pandas().head(20)
+        stat_head = stat_head_df.tail(8).to_json(orient="table")
+        self.assertEqual({'data': [{'avg_holding_time': None,
+                                    'avg_turnover': 0.1073344404,
+                                    'bias': 1.0,
+                                    'equity': 1.0,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 0.0,
+                                    'relative_return': 0.0,
+                                    'sharpe_ratio': None,
+                                    'time': '2015-01-13T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1087649158,
+                                    'bias': 1.0,
+                                    'equity': 1.0,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 0.0,
+                                    'relative_return': 0.0,
+                                    'sharpe_ratio': None,
+                                    'time': '2015-01-14T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1216795153,
+                                    'bias': 1.0,
+                                    'equity': 1.1155921267,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 13.32074858,
+                                    'relative_return': 0.1155921267,
+                                    'sharpe_ratio': 24.1813858204,
+                                    'time': '2015-01-15T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.5508678733},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1214536932,
+                                    'bias': 1.0,
+                                    'equity': 1.1203868373,
+                                    'instruments': 1.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 12.3723413064,
+                                    'relative_return': 0.0042979065,
+                                    'sharpe_ratio': 23.1861834887,
+                                    'time': '2015-01-16T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.5336083583},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1175824065,
+                                    'bias': 1.0,
+                                    'equity': 1.0694302345,
+                                    'instruments': 1.0,
+                                    'max_drawdown': -0.045481258,
+                                    'mean_return': 3.2259117591,
+                                    'relative_return': -0.045481258,
+                                    'sharpe_ratio': 5.6612638682,
+                                    'time': '2015-01-17T00:00:00.000Z',
+                                    'underwater': -0.045481258,
+                                    'volatility': 0.5698218338},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1165122641,
+                                    'bias': 1.0,
+                                    'equity': 1.1283481789,
+                                    'instruments': 1.0,
+                                    'max_drawdown': -0.045481258,
+                                    'mean_return': 10.572579761,
+                                    'relative_return': 0.0550928359,
+                                    'sharpe_ratio': 17.7217488389,
+                                    'time': '2015-01-18T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.5965878344},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1112712787,
+                                    'bias': 1.0,
+                                    'equity': 1.1665716793,
+                                    'instruments': 1.0,
+                                    'max_drawdown': -0.045481258,
+                                    'mean_return': 18.2931777607,
+                                    'relative_return': 0.0338756255,
+                                    'sharpe_ratio': 30.9149139399,
+                                    'time': '2015-01-19T00:00:00.000Z',
+                                    'underwater': 0.0,
+                                    'volatility': 0.5917266274},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.1088763711,
+                                    'bias': 1.0,
+                                    'equity': 1.1400976294,
+                                    'instruments': 1.0,
+                                    'max_drawdown': -0.045481258,
+                                    'mean_return': 9.94440808,
+                                    'relative_return': -0.0226938905,
+                                    'sharpe_ratio': 16.8184706304,
+                                    'time': '2015-01-20T00:00:00.000Z',
+                                    'underwater': -0.0226938905,
+                                    'volatility': 0.5912789753}],
+                          'schema': EXPECTED_JSON_SCHEMA['statistic']}, json.loads(stat_head))
+
+        stat_tail = stat.to_pandas().tail().to_json(orient="table")
+        self.assertEqual({'data': [{'avg_holding_time': None,
+                                    'avg_turnover': 0.0677416729,
+                                    'bias': 1.0,
+                                    'equity': 1.2816699212,
+                                    'instruments': 1.0,
+                                    'max_drawdown': -0.2083435733,
+                                    'mean_return': 4.0404559571,
+                                    'relative_return': -0.0053911755,
+                                    'sharpe_ratio': 5.5658601428,
+                                    'time': '2015-02-25T00:00:00.000Z',
+                                    'underwater': -0.1345838404,
+                                    'volatility': 0.7259355883},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.0665608175,
+                                    'bias': 1.0,
+                                    'equity': 1.2750458866,
+                                    'instruments': 1.0,
+                                    'max_drawdown': -0.2083435733,
+                                    'mean_return': 3.7395322077,
+                                    'relative_return': -0.0051682844,
+                                    'sharpe_ratio': 5.1937539624,
+                                    'time': '2015-02-26T00:00:00.000Z',
+                                    'underwater': -0.1390565573,
+                                    'volatility': 0.7200056519},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.0668562147,
+                                    'bias': 1.0,
+                                    'equity': 1.384022378,
+                                    'instruments': 1.0,
+                                    'max_drawdown': -0.2083435733,
+                                    'mean_return': 6.7308670766,
+                                    'relative_return': 0.085468682,
+                                    'sharpe_ratio': 9.0797073142,
+                                    'time': '2015-02-27T00:00:00.000Z',
+                                    'underwater': -0.0654728559,
+                                    'volatility': 0.7413088158},
+                                   {'avg_holding_time': None,
+                                    'avg_turnover': 0.0672549949,
+                                    'bias': 1.0,
+                                    'equity': 1.3780978689,
+                                    'instruments': 1.0,
+                                    'max_drawdown': -0.2083435733,
+                                    'mean_return': 6.2718989565,
+                                    'relative_return': -0.0042806455,
+                                    'sharpe_ratio': 8.5277607068,
+                                    'time': '2015-02-28T00:00:00.000Z',
+                                    'underwater': -0.0694732353,
+                                    'volatility': 0.7354684509},
+                                   {'avg_holding_time': 58.0,
+                                    'avg_turnover': 0.0665924113,
+                                    'bias': 1.0,
+                                    'equity': 1.4109467797,
+                                    'instruments': 1.0,
+                                    'max_drawdown': -0.2083435733,
+                                    'mean_return': 7.1193827619,
+                                    'relative_return': 0.0238364136,
+                                    'sharpe_ratio': 9.7446973709,
+                                    'time': '2015-03-01T00:00:00.000Z',
+                                    'underwater': -0.0472928145,
+                                    'volatility': 0.7305904423}],
+                          'schema': EXPECTED_JSON_SCHEMA['statistic']}, json.loads(stat_tail))
+
     def test_relative_return(self):
-        weights = get_base_df()
-        weights_two_day = weights.head(100)
+        # this code demonstrates the problem of calculating if nan is found in the sample
+        #  {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-18T00:00:00.000Z', 'values': 0.0},
+        #           {'time': '2021-02-19T00:00:00.000Z', 'values': 0.0},
+
+        data = stats_data.get_base_df()
+        weights_two_day = data.head(100)
         one = weights_two_day.sel(field="close") - weights_two_day.sel(field="close") + 1
 
         points_per_year = qnstats.calc_avg_points_per_year(weights_two_day)
         self.assertEqual(365, points_per_year)
 
         portfolio_history = qnstats.output_normalize(one, per_asset=False)
-        rr = qnstats.calc_relative_return(weights_two_day, portfolio_history, slippage_factor=0.0,
-                                          roll_slippage_factor=0.0, per_asset=False,
-                                          points_per_year=points_per_year)
-        rr_df = rr.to_pandas()
+
+        rr_df, _ = get_rr_dataframe_and_json(data, portfolio_history)
+        stat_head = json.loads(rr_df.to_json(orient="table"))
         self.assertEqual(
-            {"schema": {"fields": [{"name": "time", "type": "datetime"}, {"name": "values", "type": "number"}],
-                        "primaryKey": ["time"], "pandas_version": "0.20.0"},
+            {"schema": EXPECTED_JSON_SCHEMA["base_values"],
              "data": [{"time": "2021-01-30T00:00:00.000Z", "values": 0.0},
                       {"time": "2021-01-31T00:00:00.000Z", "values": 0.0},
                       {"time": "2021-02-01T00:00:00.000Z", "values": 0.0},
@@ -400,946 +1004,187 @@ class TestBaseStatistic(unittest.TestCase):
                       {"time": "2021-05-06T00:00:00.000Z", "values": 0.0103092784},
                       {"time": "2021-05-07T00:00:00.000Z", "values": 0.0102040816},
                       {"time": "2021-05-08T00:00:00.000Z", "values": 0.0101010101},
-                      {"time": "2021-05-09T00:00:00.000Z", "values": 0.01}]}, json.loads(rr_df.to_json(orient="table")))
+                      {"time": "2021-05-09T00:00:00.000Z", "values": 0.01}]}, stat_head)
 
-    def test_relative_return_complex(self):
-        weights = get_base_df()
-        one = weights.sel(field="close") - weights.sel(field="close") + 1
+        data_two = stats_data.get_base_df_two_with_NaN()
+
+        data_ = data_two.sel(asset=['BTC'])
+
+        one_ = data_.sel(field="close") - data_.sel(field="close") + 1
+        one_ = one_.fillna(1)
+
+        portfolio_history_ = qnstats.output_normalize(one, per_asset=False)
+        rr_df, _ = get_rr_dataframe_and_json(data_, portfolio_history_)
+        stat_head = json.loads(rr_df.head(30).to_json(orient="table"))
+        self.assertEqual(
+            {"schema": EXPECTED_JSON_SCHEMA["base_values"],
+             "data": [{"time": "2021-01-30T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-01-31T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-01T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-02T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-03T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-04T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-05T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-06T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-07T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-08T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-09T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-10T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-11T00:00:00.000Z", "values": 0.0},
+                      {"time": "2021-02-12T00:00:00.000Z", "values": 0.0},
+                      {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-18T00:00:00.000Z', 'values': 0.0},
+                      {'time': '2021-02-19T00:00:00.000Z', 'values': 0.0},
+                      {"time": "2021-02-20T00:00:00.000Z", "values": 0.0454545455},
+                      {"time": "2021-02-21T00:00:00.000Z", "values": 0.0434782609},
+                      {"time": "2021-02-22T00:00:00.000Z", "values": 0.0416666667},
+                      {"time": "2021-02-23T00:00:00.000Z", "values": 0.04},
+                      {"time": "2021-02-24T00:00:00.000Z", "values": 0.0384615385},
+                      {"time": "2021-02-25T00:00:00.000Z", "values": 0.037037037},
+                      {"time": "2021-02-26T00:00:00.000Z", "values": 0.0357142857},
+                      {"time": "2021-02-27T00:00:00.000Z", "values": 0.0344827586},
+                      ]}, stat_head)
+
+    def test_relative_return_per_asset(self):
+        # this code demonstrates the problem of calculating if nan is found in the sample
+        #  {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-13T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-14T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-16T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-17T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-18T00:00:00.000Z'},
+        #           {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-19T00:00:00.000Z'},
+
+        data = stats_data.get_base_df_two()
+        one = data.sel(field="close") - data.sel(field="close") + 1
+        one = one.fillna(1)
 
         portfolio_history = qnstats.output_normalize(one, per_asset=False)
-        rr = qnstats.calc_relative_return(weights, portfolio_history, slippage_factor=0.0,
-                                          roll_slippage_factor=0.0, per_asset=False,
-                                          points_per_year=365)
 
-        stat_head_df = rr.to_pandas().head(20)
-        stat_head = stat_head_df.tail(8).to_json(orient="table")
-        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
-                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0625},
-                                   {'time': '2021-02-15T00:00:00.000Z', 'values': 0.0588235294},
-                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
-                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
-                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'values', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_head))
+        rr_df, _ = get_rr_dataframe_and_json(data, portfolio_history, per_asset=True)
+        stat_head = json.loads(rr_df.to_json(orient="table"))
+        self.assertEqual(
+            {'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-01-30T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-01-31T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-01T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-02T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-03T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-04T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-05T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-06T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-07T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-08T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-09T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-10T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                      {'BTC': 0.0333333333,
+                       'ETH': 0.0333333333,
+                       'time': '2021-02-13T00:00:00.000Z'},
+                      {'BTC': 0.03125, 'ETH': 0.03125, 'time': '2021-02-14T00:00:00.000Z'},
+                      {'BTC': 0.0294117647,
+                       'ETH': 0.0294117647,
+                       'time': '2021-02-15T00:00:00.000Z'},
+                      {'BTC': 0.0277777778,
+                       'ETH': 0.0277777778,
+                       'time': '2021-02-16T00:00:00.000Z'},
+                      {'BTC': 0.0263157895,
+                       'ETH': 0.0263157895,
+                       'time': '2021-02-17T00:00:00.000Z'},
+                      {'BTC': 0.025, 'ETH': 0.025, 'time': '2021-02-18T00:00:00.000Z'},
+                      {'BTC': 0.0238095238,
+                       'ETH': 0.0238095238,
+                       'time': '2021-02-19T00:00:00.000Z'},
+                      {'BTC': 0.0227272727,
+                       'ETH': 0.0227272727,
+                       'time': '2021-02-20T00:00:00.000Z'},
+                      {'BTC': 0.0217391304,
+                       'ETH': 0.0217391304,
+                       'time': '2021-02-21T00:00:00.000Z'},
+                      {'BTC': 0.0208333333,
+                       'ETH': 0.0208333333,
+                       'time': '2021-02-22T00:00:00.000Z'},
+                      {'BTC': 0.02, 'ETH': 0.02, 'time': '2021-02-23T00:00:00.000Z'},
+                      {'BTC': 0.0192307692,
+                       'ETH': 0.0192307692,
+                       'time': '2021-02-24T00:00:00.000Z'},
+                      {'BTC': 0.0185185185,
+                       'ETH': 0.0185185185,
+                       'time': '2021-02-25T00:00:00.000Z'},
+                      {'BTC': 0.0178571429,
+                       'ETH': 0.0178571429,
+                       'time': '2021-02-26T00:00:00.000Z'},
+                      {'BTC': 0.0172413793,
+                       'ETH': 0.0172413793,
+                       'time': '2021-02-27T00:00:00.000Z'}],
+             'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                   {'name': 'BTC', 'type': 'number'},
+                                   {'name': 'ETH', 'type': 'number'}],
+                        'pandas_version': '0.20.0',
+                        'primaryKey': ['time']}}, stat_head)
 
-        weights.loc[dict(time='2021-02-15T00:00:00.000Z', asset='BTC', field='open')] = 4
+        data_two = stats_data.get_base_df_two_with_NaN()
 
-        portfolio_history = qnstats.output_normalize(one, per_asset=False)
-        rr = qnstats.calc_relative_return(weights, portfolio_history, slippage_factor=0.0,
-                                          roll_slippage_factor=0.0, per_asset=False,
-                                          points_per_year=365)
+        one_ = data_two.sel(field="close") - data_two.sel(field="close") + 1
+        one_ = one_.fillna(1)
 
-        stat_head_df = rr.to_pandas().head(20)
-        stat_head = stat_head_df.tail(8).to_json(orient="table")
-        self.assertEqual({'data': [{'time': '2021-02-11T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-12T00:00:00.000Z', 'values': 0.0},
-                                   {'time': '2021-02-13T00:00:00.000Z', 'values': 0.0666666667},
-                                   {'time': '2021-02-14T00:00:00.000Z', 'values': 0.0625},
-                                   {'time': '2021-02-15T00:00:00.000Z', 'values': -0.5709342561},
-                                   {'time': '2021-02-16T00:00:00.000Z', 'values': 0.0555555556},
-                                   {'time': '2021-02-17T00:00:00.000Z', 'values': 0.0526315789},
-                                   {'time': '2021-02-18T00:00:00.000Z', 'values': 0.05}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'values', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_head))
+        portfolio_history_ = qnstats.output_normalize(one_, per_asset=False)
 
-    def test_slippage_factor(self):
-        weights = get_base_df()
-
-        slippage = qnstats.calc_slippage(weights,
-                                         period_days=1,
-                                         fract=0.05,
-                                         points_per_year=365)
-        r = slippage.to_pandas().head(5).to_json(orient="table")
-
-        self.assertEqual({'data': [{'BTC': None, 'time': '2021-01-30T00:00:00.000Z'},
-                                   {'BTC': 0.05, 'time': '2021-01-31T00:00:00.000Z'},
-                                   {'BTC': 0.05, 'time': '2021-02-01T00:00:00.000Z'},
-                                   {'BTC': 0.05, 'time': '2021-02-02T00:00:00.000Z'},
-                                   {'BTC': 0.05, 'time': '2021-02-03T00:00:00.000Z'}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'BTC', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(r))
-
-        weights = get_base_df()
-
-        weights.loc[dict(time='2021-01-31T00:00:00.000Z', asset='BTC', field='close')] = 4
-        weights.loc[dict(time='2021-01-31T00:00:00.000Z', asset='BTC', field='high')] = 4
-
-        slippage = qnstats.calc_slippage(weights,
-                                         period_days=1,
-                                         fract=0.05,
-                                         points_per_year=365)
-        r = slippage.to_pandas().head(3).to_json(orient="table")
-
-        self.assertEqual({'data': [{'BTC': None, 'time': '2021-01-30T00:00:00.000Z'},
-                                   {'BTC': 0.1, 'time': '2021-01-31T00:00:00.000Z'},
-                                   {'BTC': 0.05, 'time': '2021-02-01T00:00:00.000Z'}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'BTC', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(r))
-
-    def test_statistic(self):
-        weights = get_base_df()
-        buy_and_hold = weights.sel(field="close") - weights.sel(field="close") + 1
-
-        stat = qnstats.calc_stat(weights, buy_and_hold)
-        stat_head_df = stat.to_pandas().head(20)
-        stat_head = stat_head_df.tail(8).to_json(orient="table")
-        self.assertEqual({'data': [{'avg_holding_time': None,
-                                    'avg_turnover': 0.2387085137,
-                                    'bias': 1.0,
-                                    'equity': 1.0,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 0.0,
-                                    'relative_return': 0.0,
-                                    'sharpe_ratio': None,
-                                    'time': '2021-02-11T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.0},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.2271524111,
-                                    'bias': 1.0,
-                                    'equity': 1.0,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 0.0,
-                                    'relative_return': 0.0,
-                                    'sharpe_ratio': None,
-                                    'time': '2021-02-12T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.0},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.2125164554,
-                                    'bias': 1.0,
-                                    'equity': 1.0633333333,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 3.4561119146,
-                                    'relative_return': 0.0633333333,
-                                    'sharpe_ratio': 11.4508113541,
-                                    'time': '2021-02-13T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.301822448},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1994798535,
-                                    'bias': 1.0,
-                                    'equity': 1.12978125,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 15.1783379265,
-                                    'relative_return': 0.0624902038,
-                                    'sharpe_ratio': 38.1834983226,
-                                    'time': '2021-02-14T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.3975104062},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1879499944,
-                                    'bias': 1.0,
-                                    'equity': 1.19623894,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 45.8594135909,
-                                    'relative_return': 0.0588235023,
-                                    'sharpe_ratio': 102.2394822568,
-                                    'time': '2021-02-15T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.4485489615},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1776803267,
-                                    'bias': 1.0,
-                                    'equity': 1.2626966588,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 112.2711331786,
-                                    'relative_return': 0.0555555555,
-                                    'sharpe_ratio': 234.9847755271,
-                                    'time': '2021-02-16T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.4777804559},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1684749293,
-                                    'bias': 1.0,
-                                    'equity': 1.3291543776,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 235.5641731673,
-                                    'relative_return': 0.0526315789,
-                                    'sharpe_ratio': 476.5440779962,
-                                    'time': '2021-02-17T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.4943177012},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1601764962,
-                                    'bias': 1.0,
-                                    'equity': 1.3956120965,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 437.4865053257,
-                                    'relative_return': 0.05,
-                                    'sharpe_ratio': 869.9875335492,
-                                    'time': '2021-02-18T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.5028652578}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'equity', 'type': 'number'},
-                                                {'name': 'relative_return', 'type': 'number'},
-                                                {'name': 'volatility', 'type': 'number'},
-                                                {'name': 'underwater', 'type': 'number'},
-                                                {'name': 'max_drawdown', 'type': 'number'},
-                                                {'name': 'sharpe_ratio', 'type': 'number'},
-                                                {'name': 'mean_return', 'type': 'number'},
-                                                {'name': 'bias', 'type': 'number'},
-                                                {'name': 'instruments', 'type': 'number'},
-                                                {'name': 'avg_turnover', 'type': 'number'},
-                                                {'name': 'avg_holding_time', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_head))
-
-        stat_tail = stat.to_pandas().tail().to_json(orient="table")
-        self.assertEqual({'data': [{'avg_holding_time': None,
-                                    'avg_turnover': 0.0337705883,
-                                    'bias': 1.0,
-                                    'equity': 6.4463987315,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 1193.2391460706,
-                                    'relative_return': 0.0104166667,
-                                    'sharpe_ratio': 4237.1617981522,
-                                    'time': '2021-05-05T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.2816128349},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.0334235337,
-                                    'bias': 1.0,
-                                    'equity': 6.5128564504,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 1152.7982974101,
-                                    'relative_return': 0.0103092784,
-                                    'sharpe_ratio': 4106.228531354,
-                                    'time': '2021-05-06T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.2807438233},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.0330835398,
-                                    'bias': 1.0,
-                                    'equity': 6.5793141693,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 1114.0783627083,
-                                    'relative_return': 0.0102040816,
-                                    'sharpe_ratio': 3980.4004956444,
-                                    'time': '2021-05-07T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.279891022},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.0327503934,
-                                    'bias': 1.0,
-                                    'equity': 6.6457718882,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 1076.9956058566,
-                                    'relative_return': 0.0101010101,
-                                    'sharpe_ratio': 3859.4543277577,
-                                    'time': '2021-05-08T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.2790538544},
-                                   {'avg_holding_time': 98.0,
-                                    'avg_turnover': 0.0324238895,
-                                    'bias': 1.0,
-                                    'equity': 6.712229607,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 1041.4706461667,
-                                    'relative_return': 0.01,
-                                    'sharpe_ratio': 3743.1765832705,
-                                    'time': '2021-05-09T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.27823177}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'equity', 'type': 'number'},
-                                                {'name': 'relative_return', 'type': 'number'},
-                                                {'name': 'volatility', 'type': 'number'},
-                                                {'name': 'underwater', 'type': 'number'},
-                                                {'name': 'max_drawdown', 'type': 'number'},
-                                                {'name': 'sharpe_ratio', 'type': 'number'},
-                                                {'name': 'mean_return', 'type': 'number'},
-                                                {'name': 'bias', 'type': 'number'},
-                                                {'name': 'instruments', 'type': 'number'},
-                                                {'name': 'avg_turnover', 'type': 'number'},
-                                                {'name': 'avg_holding_time', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_tail))
-
-    def test_global_cryptofutures_load_data(self):
-        d = qndata.cryptofutures_load_data(min_date="2015-01-01",
-                                           max_date="2015-03-01",
-                                           dims=('time', 'field', 'asset'))
-        buy_and_hold = d.sel(field="close") - d.sel(field="close") + 1
-        stat = qnstats.calc_stat(d,
-                                 buy_and_hold)
-        stat_head_df = stat.to_pandas().head(20)
-        stat_head = stat_head_df.tail(8).to_json(orient="table")
-        self.assertEqual({'data': [{'avg_holding_time': None,
-                                    'avg_turnover': 0.1073344404,
-                                    'bias': 1.0,
-                                    'equity': 1.0,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 0.0,
-                                    'relative_return': 0.0,
-                                    'sharpe_ratio': None,
-                                    'time': '2015-01-13T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.0},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1087649158,
-                                    'bias': 1.0,
-                                    'equity': 1.0,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 0.0,
-                                    'relative_return': 0.0,
-                                    'sharpe_ratio': None,
-                                    'time': '2015-01-14T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.0},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1217410247,
-                                    'bias': 1.0,
-                                    'equity': 1.1170697321,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 13.7895032698,
-                                    'relative_return': 0.1170697321,
-                                    'sharpe_ratio': 24.7163767489,
-                                    'time': '2015-01-15T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.5579095759},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.121510183,
-                                    'bias': 1.0,
-                                    'equity': 1.1218896609,
-                                    'instruments': 1.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 12.7875689899,
-                                    'relative_return': 0.0043147967,
-                                    'sharpe_ratio': 23.6616374485,
-                                    'time': '2015-01-16T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.54043466},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1176355782,
-                                    'bias': 1.0,
-                                    'equity': 1.070864625,
-                                    'instruments': 1.0,
-                                    'max_drawdown': -0.0454813318,
-                                    'mean_return': 3.3492939227,
-                                    'relative_return': -0.0454813318,
-                                    'sharpe_ratio': 5.8145562506,
-                                    'time': '2015-01-17T00:00:00.000Z',
-                                    'underwater': -0.0454813318,
-                                    'volatility': 0.5760188359},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1165624919,
-                                    'bias': 1.0,
-                                    'equity': 1.1298618212,
-                                    'instruments': 1.0,
-                                    'max_drawdown': -0.0454813318,
-                                    'mean_return': 10.8914806998,
-                                    'relative_return': 0.0550930481,
-                                    'sharpe_ratio': 18.0909344181,
-                                    'time': '2015-01-18T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.6020408039},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1113186252,
-                                    'bias': 1.0,
-                                    'equity': 1.1681417869,
-                                    'instruments': 1.0,
-                                    'max_drawdown': -0.0454813318,
-                                    'mean_return': 18.7981781722,
-                                    'relative_return': 0.0338802187,
-                                    'sharpe_ratio': 31.4944780481,
-                                    'time': '2015-01-19T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.5968721928},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.1089211142,
-                                    'bias': 1.0,
-                                    'equity': 1.1416371714,
-                                    'instruments': 1.0,
-                                    'max_drawdown': -0.0454813318,
-                                    'mean_return': 10.2172872267,
-                                    'relative_return': -0.0226895534,
-                                    'sharpe_ratio': 17.1362010282,
-                                    'time': '2015-01-20T00:00:00.000Z',
-                                    'underwater': -0.0226895534,
-                                    'volatility': 0.5962399256}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'equity', 'type': 'number'},
-                                                {'name': 'relative_return', 'type': 'number'},
-                                                {'name': 'volatility', 'type': 'number'},
-                                                {'name': 'underwater', 'type': 'number'},
-                                                {'name': 'max_drawdown', 'type': 'number'},
-                                                {'name': 'sharpe_ratio', 'type': 'number'},
-                                                {'name': 'mean_return', 'type': 'number'},
-                                                {'name': 'bias', 'type': 'number'},
-                                                {'name': 'instruments', 'type': 'number'},
-                                                {'name': 'avg_turnover', 'type': 'number'},
-                                                {'name': 'avg_holding_time', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_head))
-
-        stat_tail = stat.to_pandas().tail().to_json(orient="table")
-        self.assertEqual({'data': [{'avg_holding_time': None,
-                                    'avg_turnover': 0.0677576685,
-                                    'bias': 1.0,
-                                    'equity': 1.283406468,
-                                    'instruments': 1.0,
-                                    'max_drawdown': -0.2083424427,
-                                    'mean_return': 4.0851354947,
-                                    'relative_return': -0.0053911747,
-                                    'sharpe_ratio': 5.6160104646,
-                                    'time': '2015-02-25T00:00:00.000Z',
-                                    'underwater': -0.1345804446,
-                                    'volatility': 0.727408811},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.0665765325,
-                                    'bias': 1.0,
-                                    'equity': 1.2767734584,
-                                    'instruments': 1.0,
-                                    'max_drawdown': -0.2083424427,
-                                    'mean_return': 3.7808040474,
-                                    'relative_return': -0.0051682844,
-                                    'sharpe_ratio': 5.2404365811,
-                                    'time': '2015-02-26T00:00:00.000Z',
-                                    'underwater': -0.139053179,
-                                    'volatility': 0.7214673794},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.0668716606,
-                                    'bias': 1.0,
-                                    'equity': 1.3858977648,
-                                    'instruments': 1.0,
-                                    'max_drawdown': -0.2083424427,
-                                    'mean_return': 6.7970275324,
-                                    'relative_return': 0.0854688087,
-                                    'sharpe_ratio': 9.1519468642,
-                                    'time': '2015-02-27T00:00:00.000Z',
-                                    'underwater': -0.0654690799,
-                                    'volatility': 0.7426865161},
-                                   {'avg_holding_time': None,
-                                    'avg_turnover': 0.0672701772,
-                                    'bias': 1.0,
-                                    'equity': 1.3799653632,
-                                    'instruments': 1.0,
-                                    'max_drawdown': -0.2083424427,
-                                    'mean_return': 6.3330768196,
-                                    'relative_return': -0.0042805478,
-                                    'sharpe_ratio': 8.5949630968,
-                                    'time': '2015-02-28T00:00:00.000Z',
-                                    'underwater': -0.0694693841,
-                                    'volatility': 0.7368358361},
-                                   {'avg_holding_time': 58.0,
-                                    'avg_turnover': 0.0666073409,
-                                    'bias': 1.0,
-                                    'equity': 1.4128588134,
-                                    'instruments': 1.0,
-                                    'max_drawdown': -0.2083424427,
-                                    'mean_return': 7.1865481596,
-                                    'relative_return': 0.0238364317,
-                                    'sharpe_ratio': 9.8184890165,
-                                    'time': '2015-03-01T00:00:00.000Z',
-                                    'underwater': -0.0472888546,
-                                    'volatility': 0.731940337}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'equity', 'type': 'number'},
-                                                {'name': 'relative_return', 'type': 'number'},
-                                                {'name': 'volatility', 'type': 'number'},
-                                                {'name': 'underwater', 'type': 'number'},
-                                                {'name': 'max_drawdown', 'type': 'number'},
-                                                {'name': 'sharpe_ratio', 'type': 'number'},
-                                                {'name': 'mean_return', 'type': 'number'},
-                                                {'name': 'bias', 'type': 'number'},
-                                                {'name': 'instruments', 'type': 'number'},
-                                                {'name': 'avg_turnover', 'type': 'number'},
-                                                {'name': 'avg_holding_time', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_tail))
-
-    def test_global_futures_load_data(self):
-        d = qndata.futures_load_data(min_date="2015-01-01",
-                                     max_date="2015-03-01",
-                                     dims=('time', 'field', 'asset'))
-        buy_and_hold = d.sel(field="close") - d.sel(field="close") + 1
-        stat = qnstats.calc_stat(d,
-                                 buy_and_hold)
-        stat_head_df = stat.to_pandas().head(20)
-        stat_head = stat_head_df.tail(8).to_json(orient="table")
-        self.assertEqual({'data': [{'avg_holding_time': 1.4975963217,
-                                    'avg_turnover': 0.2240413778,
-                                    'bias': 1.0,
-                                    'equity': 1.0,
-                                    'instruments': 71.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 0.0,
-                                    'relative_return': 0.0,
-                                    'sharpe_ratio': None,
-                                    'time': '2015-01-19T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.0},
-                                   {'avg_holding_time': 3.5063911766,
-                                    'avg_turnover': 0.2283826683,
-                                    'bias': 1.0,
-                                    'equity': 1.0,
-                                    'instruments': 71.0,
-                                    'max_drawdown': 0.0,
-                                    'mean_return': 0.0,
-                                    'relative_return': 0.0,
-                                    'sharpe_ratio': None,
-                                    'time': '2015-01-20T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.0},
-                                   {'avg_holding_time': 4.435443262,
-                                    'avg_turnover': 0.2527382758,
-                                    'bias': 1.0,
-                                    'equity': 0.9985330555,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0014669445,
-                                    'mean_return': -0.0242656321,
-                                    'relative_return': -0.0014669445,
-                                    'sharpe_ratio': -4.1857019583,
-                                    'time': '2015-01-21T00:00:00.000Z',
-                                    'underwater': -0.0014669445,
-                                    'volatility': 0.0057972671},
-                                   {'avg_holding_time': 4.435443262,
-                                    'avg_turnover': 0.2374045948,
-                                    'bias': 1.0,
-                                    'equity': 1.0006414755,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0014669445,
-                                    'mean_return': 0.0101106923,
-                                    'relative_return': 0.0021115175,
-                                    'sharpe_ratio': 0.9948183022,
-                                    'time': '2015-01-22T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.0101633558},
-                                   {'avg_holding_time': 4.4139810561,
-                                    'avg_turnover': 0.2243219851,
-                                    'bias': 1.0,
-                                    'equity': 1.0025655131,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0014669445,
-                                    'mean_return': 0.0385552246,
-                                    'relative_return': 0.0019228042,
-                                    'sharpe_ratio': 3.1857939553,
-                                    'time': '2015-01-23T00:00:00.000Z',
-                                    'underwater': 0.0,
-                                    'volatility': 0.0121022342},
-                                   {'avg_holding_time': 4.4346309434,
-                                    'avg_turnover': 0.2130929435,
-                                    'bias': 1.0,
-                                    'equity': 1.00062137,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0019391682,
-                                    'mean_return': 0.0086995913,
-                                    'relative_return': -0.0019391682,
-                                    'sharpe_ratio': 0.6216143491,
-                                    'time': '2015-01-26T00:00:00.000Z',
-                                    'underwater': -0.0019391682,
-                                    'volatility': 0.0139951585},
-                                   {'avg_holding_time': 4.4815124875,
-                                    'avg_turnover': 0.2035406573,
-                                    'bias': 1.0,
-                                    'equity': 1.0008131205,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0019391682,
-                                    'mean_return': 0.0107952374,
-                                    'relative_return': 0.0001916315,
-                                    'sharpe_ratio': 0.7918363801,
-                                    'time': '2015-01-27T00:00:00.000Z',
-                                    'underwater': -0.0017479084,
-                                    'volatility': 0.0136331668},
-                                   {'avg_holding_time': 4.4815124875,
-                                    'avg_turnover': 0.1937784263,
-                                    'bias': 1.0,
-                                    'equity': 0.9969018847,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0056491355,
-                                    'mean_return': -0.0381932198,
-                                    'relative_return': -0.003908058,
-                                    'sharpe_ratio': -2.0054402205,
-                                    'time': '2015-01-28T00:00:00.000Z',
-                                    'underwater': -0.0056491355,
-                                    'volatility': 0.0190448059}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'equity', 'type': 'number'},
-                                                {'name': 'relative_return', 'type': 'number'},
-                                                {'name': 'volatility', 'type': 'number'},
-                                                {'name': 'underwater', 'type': 'number'},
-                                                {'name': 'max_drawdown', 'type': 'number'},
-                                                {'name': 'sharpe_ratio', 'type': 'number'},
-                                                {'name': 'mean_return', 'type': 'number'},
-                                                {'name': 'bias', 'type': 'number'},
-                                                {'name': 'instruments', 'type': 'number'},
-                                                {'name': 'avg_turnover', 'type': 'number'},
-                                                {'name': 'avg_holding_time', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_head))
-
-        stat_tail = stat.to_pandas().tail().to_json(orient="table")
-        self.assertEqual({'data': [{'avg_holding_time': 8.4702783084,
-                                    'avg_turnover': 0.1326775112,
-                                    'bias': 1.0,
-                                    'equity': 1.0138500757,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0079828466,
-                                    'mean_return': 0.0951109235,
-                                    'relative_return': -0.0031417308,
-                                    'sharpe_ratio': 2.0337197313,
-                                    'time': '2015-02-23T00:00:00.000Z',
-                                    'underwater': -0.0067521642,
-                                    'volatility': 0.0467669768},
-                                   {'avg_holding_time': 8.5726998302,
-                                    'avg_turnover': 0.130256892,
-                                    'bias': 1.0,
-                                    'equity': 1.015843861,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0079828466,
-                                    'mean_return': 0.1064648372,
-                                    'relative_return': 0.0019665485,
-                                    'sharpe_ratio': 2.2976158438,
-                                    'time': '2015-02-24T00:00:00.000Z',
-                                    'underwater': -0.0047988942,
-                                    'volatility': 0.0463370922},
-                                   {'avg_holding_time': 8.5276427194,
-                                    'avg_turnover': 0.1273602796,
-                                    'bias': 1.0,
-                                    'equity': 1.0181617235,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0079828466,
-                                    'mean_return': 0.1195673077,
-                                    'relative_return': 0.0022817114,
-                                    'sharpe_ratio': 2.5999400363,
-                                    'time': '2015-02-25T00:00:00.000Z',
-                                    'underwater': -0.0025281326,
-                                    'volatility': 0.0459884867},
-                                   {'avg_holding_time': 8.5867761138,
-                                    'avg_turnover': 0.1250404875,
-                                    'bias': 1.0,
-                                    'equity': 1.0178108272,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0079828466,
-                                    'mean_return': 0.1141339463,
-                                    'relative_return': -0.0003446371,
-                                    'sharpe_ratio': 2.5103070071,
-                                    'time': '2015-02-26T00:00:00.000Z',
-                                    'underwater': -0.0028718984,
-                                    'volatility': 0.0454661306},
-                                   {'avg_holding_time': 11.7121038954,
-                                    'avg_turnover': 0.1227141634,
-                                    'bias': 1.0,
-                                    'equity': 1.0196771927,
-                                    'instruments': 71.0,
-                                    'max_drawdown': -0.0079828466,
-                                    'mean_return': 0.1235043021,
-                                    'relative_return': 0.0018337057,
-                                    'sharpe_ratio': 2.7415850925,
-                                    'time': '2015-02-27T00:00:00.000Z',
-                                    'underwater': -0.0010434589,
-                                    'volatility': 0.0450485022}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'equity', 'type': 'number'},
-                                                {'name': 'relative_return', 'type': 'number'},
-                                                {'name': 'volatility', 'type': 'number'},
-                                                {'name': 'underwater', 'type': 'number'},
-                                                {'name': 'max_drawdown', 'type': 'number'},
-                                                {'name': 'sharpe_ratio', 'type': 'number'},
-                                                {'name': 'mean_return', 'type': 'number'},
-                                                {'name': 'bias', 'type': 'number'},
-                                                {'name': 'instruments', 'type': 'number'},
-                                                {'name': 'avg_turnover', 'type': 'number'},
-                                                {'name': 'avg_holding_time', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_tail))
-
-    def test_global_cryptofutures_load_data_all(self):
-        d = qndata.cryptofutures_load_data(min_date="2015-01-01",
-                                           max_date="2015-03-01",
-                                           dims=('time', 'field', 'asset'))
-
-        stat_head = d.sel(field="close").to_pandas().to_json(orient="table")
-        self.assertEqual({'data': [{'BTC': 315.53, 'time': '2015-01-01T00:00:00.000Z'},
-                                   {'BTC': 315.3, 'time': '2015-01-02T00:00:00.000Z'},
-                                   {'BTC': 291.6, 'time': '2015-01-03T00:00:00.000Z'},
-                                   {'BTC': 264.0, 'time': '2015-01-04T00:00:00.000Z'},
-                                   {'BTC': 271.01, 'time': '2015-01-05T00:00:00.000Z'},
-                                   {'BTC': 288.5, 'time': '2015-01-06T00:00:00.000Z'},
-                                   {'BTC': 296.46, 'time': '2015-01-07T00:00:00.000Z'},
-                                   {'BTC': 292.54, 'time': '2015-01-08T00:00:00.000Z'},
-                                   {'BTC': 288.39, 'time': '2015-01-09T00:00:00.000Z'},
-                                   {'BTC': 279.27, 'time': '2015-01-10T00:00:00.000Z'},
-                                   {'BTC': 268.79, 'time': '2015-01-11T00:00:00.000Z'},
-                                   {'BTC': 271.52, 'time': '2015-01-12T00:00:00.000Z'},
-                                   {'BTC': 237.0, 'time': '2015-01-13T00:00:00.000Z'},
-                                   {'BTC': 184.42, 'time': '2015-01-14T00:00:00.000Z'},
-                                   {'BTC': 207.1, 'time': '2015-01-15T00:00:00.000Z'},
-                                   {'BTC': 208.0, 'time': '2015-01-16T00:00:00.000Z'},
-                                   {'BTC': 198.54, 'time': '2015-01-17T00:00:00.000Z'},
-                                   {'BTC': 209.48, 'time': '2015-01-18T00:00:00.000Z'},
-                                   {'BTC': 216.61, 'time': '2015-01-19T00:00:00.000Z'},
-                                   {'BTC': 211.7, 'time': '2015-01-20T00:00:00.000Z'},
-                                   {'BTC': 226.8, 'time': '2015-01-21T00:00:00.000Z'},
-                                   {'BTC': 232.0, 'time': '2015-01-22T00:00:00.000Z'},
-                                   {'BTC': 234.81, 'time': '2015-01-23T00:00:00.000Z'},
-                                   {'BTC': 245.31, 'time': '2015-01-24T00:00:00.000Z'},
-                                   {'BTC': 251.49, 'time': '2015-01-25T00:00:00.000Z'},
-                                   {'BTC': 275.0, 'time': '2015-01-26T00:00:00.000Z'},
-                                   {'BTC': 262.66, 'time': '2015-01-27T00:00:00.000Z'},
-                                   {'BTC': 234.43, 'time': '2015-01-28T00:00:00.000Z'},
-                                   {'BTC': 234.2, 'time': '2015-01-29T00:00:00.000Z'},
-                                   {'BTC': 226.89, 'time': '2015-01-30T00:00:00.000Z'},
-                                   {'BTC': 222.51, 'time': '2015-01-31T00:00:00.000Z'},
-                                   {'BTC': 233.32, 'time': '2015-02-01T00:00:00.000Z'},
-                                   {'BTC': 227.36, 'time': '2015-02-02T00:00:00.000Z'},
-                                   {'BTC': 226.89, 'time': '2015-02-03T00:00:00.000Z'},
-                                   {'BTC': 225.33, 'time': '2015-02-04T00:00:00.000Z'},
-                                   {'BTC': 217.7, 'time': '2015-02-05T00:00:00.000Z'},
-                                   {'BTC': 223.68, 'time': '2015-02-06T00:00:00.000Z'},
-                                   {'BTC': 228.0, 'time': '2015-02-07T00:00:00.000Z'},
-                                   {'BTC': 222.84, 'time': '2015-02-08T00:00:00.000Z'},
-                                   {'BTC': 221.52, 'time': '2015-02-09T00:00:00.000Z'},
-                                   {'BTC': 219.91, 'time': '2015-02-10T00:00:00.000Z'},
-                                   {'BTC': 219.42, 'time': '2015-02-11T00:00:00.000Z'},
-                                   {'BTC': 222.19, 'time': '2015-02-12T00:00:00.000Z'},
-                                   {'BTC': 235.39, 'time': '2015-02-13T00:00:00.000Z'},
-                                   {'BTC': 255.3, 'time': '2015-02-14T00:00:00.000Z'},
-                                   {'BTC': 232.32, 'time': '2015-02-15T00:00:00.000Z'},
-                                   {'BTC': 235.08, 'time': '2015-02-16T00:00:00.000Z'},
-                                   {'BTC': 241.37, 'time': '2015-02-17T00:00:00.000Z'},
-                                   {'BTC': 232.6, 'time': '2015-02-18T00:00:00.000Z'},
-                                   {'BTC': 241.26, 'time': '2015-02-19T00:00:00.000Z'},
-                                   {'BTC': 244.9, 'time': '2015-02-20T00:00:00.000Z'},
-                                   {'BTC': 244.84, 'time': '2015-02-21T00:00:00.000Z'},
-                                   {'BTC': 236.41, 'time': '2015-02-22T00:00:00.000Z'},
-                                   {'BTC': 240.16, 'time': '2015-02-23T00:00:00.000Z'},
-                                   {'BTC': 239.28, 'time': '2015-02-24T00:00:00.000Z'},
-                                   {'BTC': 237.99, 'time': '2015-02-25T00:00:00.000Z'},
-                                   {'BTC': 236.76, 'time': '2015-02-26T00:00:00.000Z'},
-                                   {'BTC': 257.0, 'time': '2015-02-27T00:00:00.000Z'},
-                                   {'BTC': 255.9, 'time': '2015-02-28T00:00:00.000Z'},
-                                   {'BTC': 262.0, 'time': '2015-03-01T00:00:00.000Z'}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'BTC', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_head))
-
-        stat_head = d.sel(field="open").to_pandas().to_json(orient="table")
-        self.assertEqual({'data': [{'BTC': 317.99, 'time': '2015-01-01T00:00:00.000Z'},
-                                   {'BTC': 315.23, 'time': '2015-01-02T00:00:00.000Z'},
-                                   {'BTC': 315.3, 'time': '2015-01-03T00:00:00.000Z'},
-                                   {'BTC': 291.58, 'time': '2015-01-04T00:00:00.000Z'},
-                                   {'BTC': 264.0, 'time': '2015-01-05T00:00:00.000Z'},
-                                   {'BTC': 271.42, 'time': '2015-01-06T00:00:00.000Z'},
-                                   {'BTC': 288.5, 'time': '2015-01-07T00:00:00.000Z'},
-                                   {'BTC': 296.64, 'time': '2015-01-08T00:00:00.000Z'},
-                                   {'BTC': 292.07, 'time': '2015-01-09T00:00:00.000Z'},
-                                   {'BTC': 287.96, 'time': '2015-01-10T00:00:00.000Z'},
-                                   {'BTC': 279.27, 'time': '2015-01-11T00:00:00.000Z'},
-                                   {'BTC': 269.0, 'time': '2015-01-12T00:00:00.000Z'},
-                                   {'BTC': 271.59, 'time': '2015-01-13T00:00:00.000Z'},
-                                   {'BTC': 237.0, 'time': '2015-01-14T00:00:00.000Z'},
-                                   {'BTC': 184.42, 'time': '2015-01-15T00:00:00.000Z'},
-                                   {'BTC': 207.08, 'time': '2015-01-16T00:00:00.000Z'},
-                                   {'BTC': 208.66, 'time': '2015-01-17T00:00:00.000Z'},
-                                   {'BTC': 198.51, 'time': '2015-01-18T00:00:00.000Z'},
-                                   {'BTC': 208.71, 'time': '2015-01-19T00:00:00.000Z'},
-                                   {'BTC': 216.9, 'time': '2015-01-20T00:00:00.000Z'},
-                                   {'BTC': 211.7, 'time': '2015-01-21T00:00:00.000Z'},
-                                   {'BTC': 227.3, 'time': '2015-01-22T00:00:00.000Z'},
-                                   {'BTC': 231.94, 'time': '2015-01-23T00:00:00.000Z'},
-                                   {'BTC': 234.84, 'time': '2015-01-24T00:00:00.000Z'},
-                                   {'BTC': 245.5, 'time': '2015-01-25T00:00:00.000Z'},
-                                   {'BTC': 251.49, 'time': '2015-01-26T00:00:00.000Z'},
-                                   {'BTC': 275.0, 'time': '2015-01-27T00:00:00.000Z'},
-                                   {'BTC': 262.59, 'time': '2015-01-28T00:00:00.000Z'},
-                                   {'BTC': 234.58, 'time': '2015-01-29T00:00:00.000Z'},
-                                   {'BTC': 234.21, 'time': '2015-01-30T00:00:00.000Z'},
-                                   {'BTC': 227.16, 'time': '2015-01-31T00:00:00.000Z'},
-                                   {'BTC': 222.69, 'time': '2015-02-01T00:00:00.000Z'},
-                                   {'BTC': 233.32, 'time': '2015-02-02T00:00:00.000Z'},
-                                   {'BTC': 227.27, 'time': '2015-02-03T00:00:00.000Z'},
-                                   {'BTC': 226.89, 'time': '2015-02-04T00:00:00.000Z'},
-                                   {'BTC': 225.4, 'time': '2015-02-05T00:00:00.000Z'},
-                                   {'BTC': 217.7, 'time': '2015-02-06T00:00:00.000Z'},
-                                   {'BTC': 223.8, 'time': '2015-02-07T00:00:00.000Z'},
-                                   {'BTC': 227.98, 'time': '2015-02-08T00:00:00.000Z'},
-                                   {'BTC': 222.85, 'time': '2015-02-09T00:00:00.000Z'},
-                                   {'BTC': 221.72, 'time': '2015-02-10T00:00:00.000Z'},
-                                   {'BTC': 219.91, 'time': '2015-02-11T00:00:00.000Z'},
-                                   {'BTC': 219.42, 'time': '2015-02-12T00:00:00.000Z'},
-                                   {'BTC': 222.19, 'time': '2015-02-13T00:00:00.000Z'},
-                                   {'BTC': 235.39, 'time': '2015-02-14T00:00:00.000Z'},
-                                   {'BTC': 255.71, 'time': '2015-02-15T00:00:00.000Z'},
-                                   {'BTC': 232.08, 'time': '2015-02-16T00:00:00.000Z'},
-                                   {'BTC': 236.58, 'time': '2015-02-17T00:00:00.000Z'},
-                                   {'BTC': 241.46, 'time': '2015-02-18T00:00:00.000Z'},
-                                   {'BTC': 232.53, 'time': '2015-02-19T00:00:00.000Z'},
-                                   {'BTC': 241.29, 'time': '2015-02-20T00:00:00.000Z'},
-                                   {'BTC': 244.89, 'time': '2015-02-21T00:00:00.000Z'},
-                                   {'BTC': 244.72, 'time': '2015-02-22T00:00:00.000Z'},
-                                   {'BTC': 236.35, 'time': '2015-02-23T00:00:00.000Z'},
-                                   {'BTC': 240.16, 'time': '2015-02-24T00:00:00.000Z'},
-                                   {'BTC': 239.33, 'time': '2015-02-25T00:00:00.000Z'},
-                                   {'BTC': 237.99, 'time': '2015-02-26T00:00:00.000Z'},
-                                   {'BTC': 236.71, 'time': '2015-02-27T00:00:00.000Z'},
-                                   {'BTC': 257.0, 'time': '2015-02-28T00:00:00.000Z'},
-                                   {'BTC': 255.89, 'time': '2015-03-01T00:00:00.000Z'}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'BTC', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_head))
-
-        stat_head = d.sel(field="high").to_pandas().to_json(orient="table")
-        self.assertEqual({'data': [{'BTC': 322.9, 'time': '2015-01-01T00:00:00.000Z'},
-                                   {'BTC': 316.74, 'time': '2015-01-02T00:00:00.000Z'},
-                                   {'BTC': 315.99, 'time': '2015-01-03T00:00:00.000Z'},
-                                   {'BTC': 292.76, 'time': '2015-01-04T00:00:00.000Z'},
-                                   {'BTC': 279.5, 'time': '2015-01-05T00:00:00.000Z'},
-                                   {'BTC': 290.45, 'time': '2015-01-06T00:00:00.000Z'},
-                                   {'BTC': 303.33, 'time': '2015-01-07T00:00:00.000Z'},
-                                   {'BTC': 300.0, 'time': '2015-01-08T00:00:00.000Z'},
-                                   {'BTC': 297.32, 'time': '2015-01-09T00:00:00.000Z'},
-                                   {'BTC': 292.1, 'time': '2015-01-10T00:00:00.000Z'},
-                                   {'BTC': 282.86, 'time': '2015-01-11T00:00:00.000Z'},
-                                   {'BTC': 274.44, 'time': '2015-01-12T00:00:00.000Z'},
-                                   {'BTC': 272.1, 'time': '2015-01-13T00:00:00.000Z'},
-                                   {'BTC': 238.5, 'time': '2015-01-14T00:00:00.000Z'},
-                                   {'BTC': 230.74, 'time': '2015-01-15T00:00:00.000Z'},
-                                   {'BTC': 223.1, 'time': '2015-01-16T00:00:00.000Z'},
-                                   {'BTC': 214.0, 'time': '2015-01-17T00:00:00.000Z'},
-                                   {'BTC': 222.0, 'time': '2015-01-18T00:00:00.000Z'},
-                                   {'BTC': 219.95, 'time': '2015-01-19T00:00:00.000Z'},
-                                   {'BTC': 219.25, 'time': '2015-01-20T00:00:00.000Z'},
-                                   {'BTC': 230.0, 'time': '2015-01-21T00:00:00.000Z'},
-                                   {'BTC': 242.0, 'time': '2015-01-22T00:00:00.000Z'},
-                                   {'BTC': 236.98, 'time': '2015-01-23T00:00:00.000Z'},
-                                   {'BTC': 248.3, 'time': '2015-01-24T00:00:00.000Z'},
-                                   {'BTC': 259.39, 'time': '2015-01-25T00:00:00.000Z'},
-                                   {'BTC': 315.0, 'time': '2015-01-26T00:00:00.000Z'},
-                                   {'BTC': 280.37, 'time': '2015-01-27T00:00:00.000Z'},
-                                   {'BTC': 269.97, 'time': '2015-01-28T00:00:00.000Z'},
-                                   {'BTC': 239.33, 'time': '2015-01-29T00:00:00.000Z'},
-                                   {'BTC': 243.89, 'time': '2015-01-30T00:00:00.000Z'},
-                                   {'BTC': 234.03, 'time': '2015-01-31T00:00:00.000Z'},
-                                   {'BTC': 233.32, 'time': '2015-02-01T00:00:00.000Z'},
-                                   {'BTC': 233.32, 'time': '2015-02-02T00:00:00.000Z'},
-                                   {'BTC': 248.42, 'time': '2015-02-03T00:00:00.000Z'},
-                                   {'BTC': 233.0, 'time': '2015-02-04T00:00:00.000Z'},
-                                   {'BTC': 228.8, 'time': '2015-02-05T00:00:00.000Z'},
-                                   {'BTC': 225.88, 'time': '2015-02-06T00:00:00.000Z'},
-                                   {'BTC': 239.78, 'time': '2015-02-07T00:00:00.000Z'},
-                                   {'BTC': 232.9, 'time': '2015-02-08T00:00:00.000Z'},
-                                   {'BTC': 225.98, 'time': '2015-02-09T00:00:00.000Z'},
-                                   {'BTC': 223.4, 'time': '2015-02-10T00:00:00.000Z'},
-                                   {'BTC': 224.4, 'time': '2015-02-11T00:00:00.000Z'},
-                                   {'BTC': 223.17, 'time': '2015-02-12T00:00:00.000Z'},
-                                   {'BTC': 242.5, 'time': '2015-02-13T00:00:00.000Z'},
-                                   {'BTC': 259.0, 'time': '2015-02-14T00:00:00.000Z'},
-                                   {'BTC': 268.54, 'time': '2015-02-15T00:00:00.000Z'},
-                                   {'BTC': 243.65, 'time': '2015-02-16T00:00:00.000Z'},
-                                   {'BTC': 246.28, 'time': '2015-02-17T00:00:00.000Z'},
-                                   {'BTC': 244.99, 'time': '2015-02-18T00:00:00.000Z'},
-                                   {'BTC': 243.42, 'time': '2015-02-19T00:00:00.000Z'},
-                                   {'BTC': 248.98, 'time': '2015-02-20T00:00:00.000Z'},
-                                   {'BTC': 247.73, 'time': '2015-02-21T00:00:00.000Z'},
-                                   {'BTC': 247.78, 'time': '2015-02-22T00:00:00.000Z'},
-                                   {'BTC': 241.0, 'time': '2015-02-23T00:00:00.000Z'},
-                                   {'BTC': 240.99, 'time': '2015-02-24T00:00:00.000Z'},
-                                   {'BTC': 240.83, 'time': '2015-02-25T00:00:00.000Z'},
-                                   {'BTC': 238.33, 'time': '2015-02-26T00:00:00.000Z'},
-                                   {'BTC': 262.8, 'time': '2015-02-27T00:00:00.000Z'},
-                                   {'BTC': 258.38, 'time': '2015-02-28T00:00:00.000Z'},
-                                   {'BTC': 266.91, 'time': '2015-03-01T00:00:00.000Z'}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'BTC', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_head))
-
-        stat_head = d.sel(field="low").to_pandas().to_json(orient="table")
-        self.assertEqual({'data': [{'BTC': 313.81, 'time': '2015-01-01T00:00:00.000Z'},
-                                   {'BTC': 313.28, 'time': '2015-01-02T00:00:00.000Z'},
-                                   {'BTC': 290.11, 'time': '2015-01-03T00:00:00.000Z'},
-                                   {'BTC': 255.03, 'time': '2015-01-04T00:00:00.000Z'},
-                                   {'BTC': 258.06, 'time': '2015-01-05T00:00:00.000Z'},
-                                   {'BTC': 270.31, 'time': '2015-01-06T00:00:00.000Z'},
-                                   {'BTC': 284.0, 'time': '2015-01-07T00:00:00.000Z'},
-                                   {'BTC': 282.01, 'time': '2015-01-08T00:00:00.000Z'},
-                                   {'BTC': 280.4, 'time': '2015-01-09T00:00:00.000Z'},
-                                   {'BTC': 275.0, 'time': '2015-01-10T00:00:00.000Z'},
-                                   {'BTC': 265.83, 'time': '2015-01-11T00:00:00.000Z'},
-                                   {'BTC': 266.24, 'time': '2015-01-12T00:00:00.000Z'},
-                                   {'BTC': 226.1, 'time': '2015-01-13T00:00:00.000Z'},
-                                   {'BTC': 166.45, 'time': '2015-01-14T00:00:00.000Z'},
-                                   {'BTC': 172.51, 'time': '2015-01-15T00:00:00.000Z'},
-                                   {'BTC': 197.72, 'time': '2015-01-16T00:00:00.000Z'},
-                                   {'BTC': 192.2, 'time': '2015-01-17T00:00:00.000Z'},
-                                   {'BTC': 194.0, 'time': '2015-01-18T00:00:00.000Z'},
-                                   {'BTC': 207.0, 'time': '2015-01-19T00:00:00.000Z'},
-                                   {'BTC': 203.7, 'time': '2015-01-20T00:00:00.000Z'},
-                                   {'BTC': 210.0, 'time': '2015-01-21T00:00:00.000Z'},
-                                   {'BTC': 223.3, 'time': '2015-01-22T00:00:00.000Z'},
-                                   {'BTC': 225.13, 'time': '2015-01-23T00:00:00.000Z'},
-                                   {'BTC': 229.03, 'time': '2015-01-24T00:00:00.000Z'},
-                                   {'BTC': 245.0, 'time': '2015-01-25T00:00:00.000Z'},
-                                   {'BTC': 251.48, 'time': '2015-01-26T00:00:00.000Z'},
-                                   {'BTC': 250.0, 'time': '2015-01-27T00:00:00.000Z'},
-                                   {'BTC': 231.01, 'time': '2015-01-28T00:00:00.000Z'},
-                                   {'BTC': 220.0, 'time': '2015-01-29T00:00:00.000Z'},
-                                   {'BTC': 224.22, 'time': '2015-01-30T00:00:00.000Z'},
-                                   {'BTC': 221.21, 'time': '2015-01-31T00:00:00.000Z'},
-                                   {'BTC': 211.02, 'time': '2015-02-01T00:00:00.000Z'},
-                                   {'BTC': 222.5, 'time': '2015-02-02T00:00:00.000Z'},
-                                   {'BTC': 222.66, 'time': '2015-02-03T00:00:00.000Z'},
-                                   {'BTC': 220.23, 'time': '2015-02-04T00:00:00.000Z'},
-                                   {'BTC': 210.12, 'time': '2015-02-05T00:00:00.000Z'},
-                                   {'BTC': 215.0, 'time': '2015-02-06T00:00:00.000Z'},
-                                   {'BTC': 222.66, 'time': '2015-02-07T00:00:00.000Z'},
-                                   {'BTC': 221.1, 'time': '2015-02-08T00:00:00.000Z'},
-                                   {'BTC': 215.33, 'time': '2015-02-09T00:00:00.000Z'},
-                                   {'BTC': 214.0, 'time': '2015-02-10T00:00:00.000Z'},
-                                   {'BTC': 218.1, 'time': '2015-02-11T00:00:00.000Z'},
-                                   {'BTC': 217.8, 'time': '2015-02-12T00:00:00.000Z'},
-                                   {'BTC': 221.46, 'time': '2015-02-13T00:00:00.000Z'},
-                                   {'BTC': 234.87, 'time': '2015-02-14T00:00:00.000Z'},
-                                   {'BTC': 228.2, 'time': '2015-02-15T00:00:00.000Z'},
-                                   {'BTC': 228.62, 'time': '2015-02-16T00:00:00.000Z'},
-                                   {'BTC': 231.5, 'time': '2015-02-17T00:00:00.000Z'},
-                                   {'BTC': 231.01, 'time': '2015-02-18T00:00:00.000Z'},
-                                   {'BTC': 231.93, 'time': '2015-02-19T00:00:00.000Z'},
-                                   {'BTC': 238.95, 'time': '2015-02-20T00:00:00.000Z'},
-                                   {'BTC': 243.28, 'time': '2015-02-21T00:00:00.000Z'},
-                                   {'BTC': 232.1, 'time': '2015-02-22T00:00:00.000Z'},
-                                   {'BTC': 232.61, 'time': '2015-02-23T00:00:00.000Z'},
-                                   {'BTC': 236.7, 'time': '2015-02-24T00:00:00.000Z'},
-                                   {'BTC': 235.53, 'time': '2015-02-25T00:00:00.000Z'},
-                                   {'BTC': 233.62, 'time': '2015-02-26T00:00:00.000Z'},
-                                   {'BTC': 236.64, 'time': '2015-02-27T00:00:00.000Z'},
-                                   {'BTC': 251.25, 'time': '2015-02-28T00:00:00.000Z'},
-                                   {'BTC': 245.65, 'time': '2015-03-01T00:00:00.000Z'}],
-                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
-                                                {'name': 'BTC', 'type': 'number'}],
-                                     'pandas_version': '0.20.0',
-                                     'primaryKey': ['time']}}, json.loads(stat_head))
+        rr_df, _ = get_rr_dataframe_and_json(data_two, portfolio_history_, per_asset=True)
+        stat_head = json.loads(rr_df.head(30).to_json(orient="table"))
+        self.assertEqual(
+            {'data': [{'BTC': 0.0, 'ETH': 0.0, 'time': '2021-01-30T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-01-31T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-01T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-02T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-03T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-04T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-05T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-06T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-07T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-08T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-09T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-10T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-11T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-12T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-13T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-14T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-15T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-16T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-17T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-18T00:00:00.000Z'},
+                      {'BTC': 0.0, 'ETH': 0.0, 'time': '2021-02-19T00:00:00.000Z'},
+                      {'BTC': 0.0227272727,
+                       'ETH': 0.0227272727,
+                       'time': '2021-02-20T00:00:00.000Z'},
+                      {'BTC': 0.0217391304,
+                       'ETH': 0.0217391304,
+                       'time': '2021-02-21T00:00:00.000Z'},
+                      {'BTC': 0.0208333333,
+                       'ETH': 0.0208333333,
+                       'time': '2021-02-22T00:00:00.000Z'},
+                      {'BTC': 0.02, 'ETH': 0.02, 'time': '2021-02-23T00:00:00.000Z'},
+                      {'BTC': 0.0192307692,
+                       'ETH': 0.0192307692,
+                       'time': '2021-02-24T00:00:00.000Z'},
+                      {'BTC': 0.0185185185,
+                       'ETH': 0.0185185185,
+                       'time': '2021-02-25T00:00:00.000Z'},
+                      {'BTC': 0.0178571429,
+                       'ETH': 0.0178571429,
+                       'time': '2021-02-26T00:00:00.000Z'},
+                      {'BTC': 0.0172413793,
+                       'ETH': 0.0172413793,
+                       'time': '2021-02-27T00:00:00.000Z'}],
+             'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                   {'name': 'BTC', 'type': 'number'},
+                                   {'name': 'ETH', 'type': 'number'}],
+                        'pandas_version': '0.20.0',
+                        'primaryKey': ['time']}}, stat_head)
 
 
 if __name__ == '__main__':

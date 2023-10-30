@@ -5,8 +5,8 @@ import os
 
 os.environ['API_KEY'] = "default"
 
-import qnt.data    as qndata
-import qnt.stats   as qnstats
+import qnt.data as qndata
+import qnt.stats as qnstats
 
 
 class Fields:
@@ -34,7 +34,17 @@ ds = Dimensions
 
 dims = (ds.FIELD, ds.TIME, ds.ASSET)
 
-import pickle
+import pandas as pd
+import xarray as xr
+import numpy as np
+
+
+def load_data_and_create_data_array(filename, dims, transpose_order):
+    ds = xr.open_dataset(filename).load()
+    dataset_name = list(ds.data_vars)[0]
+    values = ds[dataset_name].transpose(*transpose_order).values
+    coords = {dim: ds[dim].values for dim in dims}
+    return xr.DataArray(values, dims=dims, coords=coords)
 
 
 class TestBaseStatistic(unittest.TestCase):
@@ -43,8 +53,8 @@ class TestBaseStatistic(unittest.TestCase):
         self.maxDiff = None
         dir = os.path.abspath(os.curdir)
 
-        with open(dir + '/data/commodity_imf.pkl', 'rb') as input:
-            commodity = pickle.load(input)
+        dims = ['time', 'asset']
+        commodity = load_data_and_create_data_array(f"{dir}/data/commodity_imf.nc", dims, dims)
 
         commodity_server = qndata.imf_load_commodity_data(min_date="1990-01-01", max_date="2021-05-25")
         commodity_df = commodity.to_pandas().to_json(orient="table")
@@ -55,8 +65,9 @@ class TestBaseStatistic(unittest.TestCase):
     def test_futures(self):
         dir = os.path.abspath(os.curdir)
 
-        with open(dir + '/data/futures.pkl', 'rb') as input:
-            futures = pickle.load(input)
+        dims = ['field', 'time', 'asset']
+        futures = load_data_and_create_data_array(f"{dir}/data/futures.nc", dims, dims)
+
         futures_server = qndata.futures_load_data(min_date="1990-01-01", max_date="2021-05-25")
 
         futures_df = futures.sel(field="close").to_pandas().to_json(orient="table")
@@ -74,8 +85,9 @@ class TestBaseStatistic(unittest.TestCase):
     def test_crypto_futures(self):
         dir = os.path.abspath(os.curdir)
 
-        with open(dir + '/data/crypto_futures.pkl', 'rb') as input:
-            crypto_futures = pickle.load(input)
+        dims = ['field', 'time', 'asset']
+        crypto_futures = load_data_and_create_data_array(f"{dir}/data/crypto_futures.nc", dims, dims)
+
         crypto_futures_server = qndata.cryptofutures_load_data(min_date="1990-01-01", max_date="2021-05-25")
 
         f_df = crypto_futures.sel(field="close").to_pandas().tail().to_json(orient="table")
@@ -757,6 +769,8 @@ class TestBaseStatistic(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+# import pickle
+# import pickle5 as pickle
 # futures = qndata.futures_load_data(min_date="1990-01-01", max_date="2021-05-25")
 # commodity = qndata.imf_load_commodity_data(min_date="1990-01-01", max_date="2021-05-25")
 # crypto_futures = qndata.cryptofutures_load_data(min_date="1990-01-01", max_date="2021-05-25")
