@@ -72,7 +72,8 @@ def load_data(
     t = time.time()
     data = load_origin_data(assets=assets, min_date=min_date, max_date=max_date, tail=tail, stocks_type=stocks_type)
     log_info("Data loaded " + str(round(time.time() - t)) + "s")
-    data = adjust_by_splits(data, False)
+    if stocks_type != 'NASDAQ100':
+        data = adjust_by_splits(data, False)
     data = data.transpose(*dims)
     if forward_order:
         data = data.sel(**{ds.TIME: slice(None, None, -1)})
@@ -188,7 +189,7 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
             + str(round(time.time() - start_time)) + "s"
         )
 
-    fields = [f.OPEN, f.LOW, f.HIGH, f.CLOSE, f.VOL, f.DIVS, f.SPLIT, f.SPLIT_CUMPROD, f.IS_LIQUID]
+    fields = [f.OPEN, f.LOW, f.HIGH, f.CLOSE, f.VOL, f.DIVS, f.SPLIT_CUMPROD, f.IS_LIQUID]
     if len(chunks) == 0:
         whole = xr.DataArray(
             [[[np.nan]]]*len(fields),
