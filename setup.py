@@ -2,19 +2,19 @@ from setuptools import setup
 
 setup(
     name="qnt",
-    version="0.0.279",
+    version="0.0.301",
     url="https://quantiacs.com",
     license='MIT',
     packages=['qnt', 'qnt.ta', 'qnt.data', 'qnt.examples'],
     package_data={'qnt': ['*.ipynb']},
     install_requires=[
-        'scipy>=1.4.1',
+        'scipy>=1.11.3',
         'pandas==1.2.5',
-        'xarray>=0.16.0',
-        'numpy>=1.18',
-        'tabulate>=0.8.3',
-        'bottleneck>=1.3.1',
-        'numba==0.53',
-        'progressbar2>=3.37,<4'
+        'xarray==0.20.2',
+        'numpy==1.23.5',
+        'tabulate>=0.9.0',
+        'bottleneck>=1.3.7',
+        'numba==0.58.1',
+        'progressbar2>=3.55,<4'
     ]
 )

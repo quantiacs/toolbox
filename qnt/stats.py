@@ -513,7 +513,7 @@ def calc_avg_holding_time(portfolio_history,
     return res / points_per_day
 
 
-@numba.jit
+@numba.njit
 def calc_holding_log_np_nb(weights: np.ndarray) -> np.ndarray:  # , equity: np.ndarray, open: np.ndarray) -> np.ndarray:
     prev_pos = np.zeros(weights.shape[1])
     holding_time = np.zeros(weights.shape[1])  # position holding time
