@@ -1,3 +1,4 @@
+
 # README
 
 ## Installation Instructions
@@ -11,7 +12,10 @@ You can follow these easy steps and create an isolated environment on your machi
 
 2. Create an isolated environment for developing strategies and install the QNT library together with needed dependencies:
 ```bash
-conda create -n qntdev quantiacs-source::qnt conda-forge::ta-lib conda-forge::pandas==1.2.5 conda-forge::dash==2.7 python==3.10
+conda create -n qntdev conda-forge::ta-lib conda-forge::dash==2.7 python==3.10
+conda activate qntdev
+pip install pandas==1.2.5
+pip install git+https://github.com/quantiacs/toolbox.git
 ```
 
 Then set your API key. You can find it in your profile on https://quantiacs.com .
