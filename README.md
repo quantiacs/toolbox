@@ -7,15 +7,14 @@ You can use the Quantiacs library (QNT) for developing locally trading strategie
 
 You can follow these easy steps and create an isolated environment on your machine using conda for managing dependencies and avoiding conflicts:
 
-1 . Install anaconda (v2020.02 is recommended): https://www.anaconda.com/products/individual or https://repo.anaconda.com/archive/.
+1 . Install anaconda: https://www.anaconda.com/products/individual or https://repo.anaconda.com/archive/.
 
 
 2. Create an isolated environment for developing strategies and install the QNT library together with needed dependencies:
 ```bash
-conda create -n qntdev conda-forge::ta-lib conda-forge::dash==2.7 python==3.10
+conda create -n qntdev 'python>=3.10,<3.11' conda-forge::ta-lib
 conda activate qntdev
-pip install pandas==1.2.5
-pip install git+https://github.com/quantiacs/toolbox.git
+pip install 'ipywidgets==7.5' 'plotly==4.14' 'matplotlib==3.8.1' 'pandas==1.2.5' 'dash==1.21.0' git+https://github.com/quantiacs/toolbox.git
 ```
 
 Then set your API key. You can find it in your profile on https://quantiacs.com .

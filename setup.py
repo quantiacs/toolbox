@@ -2,14 +2,14 @@ from setuptools import setup
 
 setup(
     name="qnt",
-    version="0.0.303",
+    version="0.0.304",
     url="https://quantiacs.com",
     license='MIT',
     packages=['qnt', 'qnt.ta', 'qnt.data', 'qnt.examples'],
     package_data={'qnt': ['*.ipynb']},
     install_requires=[
         'scipy>=1.11.3',
-        'pandas==1.3.5',
+        # 'pandas==1.2.5',
         'xarray==0.20.2',
         'numpy==1.23.5',
         'tabulate>=0.9.0',
