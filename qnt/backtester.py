@@ -44,6 +44,7 @@ def backtest_ml(
         analyze: bool = True,
         build_plots: bool = True,
         collect_all_states: bool = False,
+        check_correlation: bool = False,
     ):
     """
 
@@ -63,6 +64,7 @@ def backtest_ml(
     :param analyze: analyze the output and calc stats
     :param build_plots: build plots (require analyze=True)
     :param collect_all_states: collect all states instead of the last one
+    :param check_correlation: correlation check
     :return:
     """
     qndc.track_event("ML_BACKTEST")
@@ -213,13 +215,16 @@ def backtest_ml(
             qnstate.write((t, model, state))
             if analyze:
                 log_info("---")
-                analyze_results(result, data, competition_type, build_plots, start_date)
-                if state is None:
-                    return result
-                elif collect_all_states:
-                    return result, states
-                else:
-                    return result, state
+                analyze_results(output=result, data=data, kind=competition_type, build_plots=build_plots,
+                                start=start_date,
+                                check_correlation=check_correlation)
+
+            if state is None:
+                return result
+            elif collect_all_states:
+                return result, states
+            else:
+                return result, state
     finally:
         qndc.set_max_datetime(None)
 
@@ -241,6 +246,7 @@ def backtest(
         analyze: bool = True,
         build_plots: bool = True,
         collect_all_states: bool = False,
+        check_correlation: bool = False,
     ):
     """
 
@@ -256,6 +262,7 @@ def backtest(
     :param analyze: analyze the output and calc stats
     :param build_plots: build plots (require analyze=True)
     :param collect_all_states: collect all states instead of the last one
+    :param check_correlation: correlation check
     :return:
     """
     qndc.track_event("BACKTEST")
@@ -356,7 +363,9 @@ def backtest(
 
         if analyze:
             log_info("---")
-            analyze_results(result, data, competition_type, build_plots, start_date)
+            analyze_results(output=result, data=data, kind=competition_type, build_plots=build_plots,
+                            start=start_date,
+                            check_correlation=check_correlation)
 
         if args_count > 1:
             return result, state
@@ -441,7 +450,7 @@ def unpack_result(result):
     return result, state
 
 
-def analyze_results(output, data, kind, build_plots, start=None):
+def analyze_results(output, data, kind, build_plots, start=None, check_correlation=True):
     log_info("Analyze results...")
 
     if len(output.time) == 0 or len(output.asset) == 0:
@@ -449,7 +458,7 @@ def analyze_results(output, data, kind, build_plots, start=None):
         return
 
     log_info("Check...")
-    qnout.check(output, data, kind)
+    qnout.check(output=output, data=data, kind=kind, check_correlation=check_correlation)
     log_info("---")
     log_info("Align...")
     output = qnout.align(output, data, start)

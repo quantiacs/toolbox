@@ -145,7 +145,7 @@ def clean(output, data, kind=None, debug=True):
     return output
 
 
-def check(output, data, kind=None):
+def check(output, data, kind=None, check_correlation=True):
     """
     This function checks your output and warn you if it contains errors.
     :return:
@@ -237,8 +237,9 @@ def check(output, data, kind=None):
                 else:
                     log_info("Ok.")
 
-                log_info("Check correlation.")
-                qns.check_correlation(output, data, False)
+                if check_correlation:
+                    log_info("Check correlation.")
+                    qns.check_correlation(output, data, print_stack_trace=False)
     except Exception as e:
         log_err(e)
 

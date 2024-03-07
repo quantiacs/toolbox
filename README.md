@@ -158,7 +158,7 @@ python -m pip install --upgrade git+git://github.com/quantiacs/toolbox.git
 
 ## Google Colab support
 
-If you want to use Google Colab with a hosted runtime, start with this [notebook](../_static/colab.ipynb).
+If you want to use Google Colab with a hosted runtime, start with this [notebook](https://quantiacs.com/documentation/en/_static/colab.ipynb).
 
 This notebook contains the necessary commands to configure a hosted runtime.
 
@@ -222,7 +222,8 @@ qnbk.backtest(
     load_data=load_data,
     lookback_period=365,
     test_period=2 * 365,
-    strategy=strategy
+    strategy=strategy,
+    check_correlation=False
 )
 
 ```
