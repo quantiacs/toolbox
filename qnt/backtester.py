@@ -279,27 +279,57 @@ def backtest(
     # ---
     log_info("Run last pass...")
     log_info("Load data...")
-    data = load_data(lookback_period)
-    try:
-        if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long'\
-             or data.name == 'stocks_nasdaq100' and competition_type != 'stocks_nasdaq100'\
-             or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures'\
-             or data.name == 'crypto' and competition_type != 'crypto'\
-             or data.name == 'futures' and competition_type != 'futures':
-            log_err("WARNING! The data type and the competition type are mismatch.")
-    except:
-        pass
-    data, time_series = extract_time_series(data)
+    if is_single_pass():
+        checking_start_data_date = pd.to_datetime(
+            qnstat.get_default_is_start_date_for_type(competition_type)) - datetime.timedelta(days=lookback_period)
+        current_date = pd.to_datetime('today')
+        data_days_difference = (current_date - checking_start_data_date).days
+        data = load_data(data_days_difference)
+        try:
+            if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long' \
+                    or data.name == 'stocks_nasdaq100' and competition_type != 'stocks_nasdaq100' \
+                    or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures' \
+                    or data.name == 'crypto' and competition_type != 'crypto' \
+                    or data.name == 'futures' and competition_type != 'futures':
+                log_err("WARNING! The data type and the competition type are mismatch.")
+        except:
+            pass
+        data, time_series = extract_time_series(data)
 
-    log_info("Run strategy...")
-    state = None
-    if is_submitted() and args_count > 1:
-        state = qnstate.read()
-    result = strategy_wrap(data, state)
-    result, state = unpack_result(result)
+        log_info("Run strategy...")
+        state = None
+        if is_submitted() and args_count > 1:
+            state = qnstate.read()
+        result = strategy_wrap(data, state)
+        result, state = unpack_result(result)
 
-    log_info("Load data for cleanup...")
-    data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), tail=60)
+        log_info("Load data for cleanup...")
+        data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), min_date=(
+                pd.to_datetime(qnstat.get_default_is_start_date_for_type(competition_type)) - datetime.timedelta(
+            days=60)))
+    else:
+        data = load_data(lookback_period)
+        try:
+            if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long' \
+                    or data.name == 'stocks_nasdaq100' and competition_type != 'stocks_nasdaq100' \
+                    or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures' \
+                    or data.name == 'crypto' and competition_type != 'crypto' \
+                    or data.name == 'futures' and competition_type != 'futures':
+                log_err("WARNING! The data type and the competition type are mismatch.")
+        except:
+            pass
+        data, time_series = extract_time_series(data)
+
+        log_info("Run strategy...")
+        state = None
+        if is_submitted() and args_count > 1:
+            state = qnstate.read()
+        result = strategy_wrap(data, state)
+        result, state = unpack_result(result)
+
+        log_info("Load data for cleanup...")
+        data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), tail=60)
+
     result = qnout.clean(result, data)
     result.name = competition_type
     log_info("Write result...")
@@ -435,6 +465,10 @@ def extract_time_series(data):
 
 def is_submitted():
     return os.environ.get("SUBMISSION_ID", "") != ""
+
+
+def is_single_pass():
+    return os.environ.get("IS_SINGLE_PASS", "") != ""
 
 
 def unpack_result(result):
