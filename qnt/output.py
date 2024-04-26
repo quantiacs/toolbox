@@ -231,9 +231,9 @@ def check(output, data, kind=None, check_correlation=True):
                 sr = calc_sharpe_ratio_for_check(data, output, kind, True)
                 log_info("Sharpe Ratio =", sr)
 
-                if sr < 1:
-                    log_err("ERROR! The Sharpe Ratio is too low.", sr, '<', 1,)
-                    log_err("Improve the strategy and make sure that the in-sample Sharpe Ratio more than 1.")
+                if sr < 0.7:
+                    log_err("ERROR! The Sharpe Ratio is too low.", sr, '<', 0.7,)
+                    log_err("Improve the strategy and make sure that the in-sample Sharpe Ratio more than 0.7.")
                 else:
                     log_info("Ok.")
 
