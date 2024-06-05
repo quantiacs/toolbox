@@ -322,7 +322,7 @@ def backtest(
 
         log_info("Run strategy...")
         state = None
-        if is_submitted() and args_count > 1:
+        if is_submitted() and args_count > 1 and not should_run_iterations():
             state = qnstate.read()
         result = strategy_wrap(data, state)
         result, state = unpack_result(result)
@@ -336,7 +336,7 @@ def backtest(
     qnout.write(result)
     qnstate.write(state)
 
-    if is_submitted():
+    if is_submitted() and not should_run_iterations():
         if args_count > 1:
             return result, [state] if collect_all_states else state
         else:
@@ -469,6 +469,10 @@ def is_submitted():
 
 def is_single_pass():
     return os.environ.get("IS_SINGLE_PASS", "") != ""
+
+
+def should_run_iterations():
+    return os.environ.get("RUN_ITERATIONS", "") != ""
 
 
 def unpack_result(result):
