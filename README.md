@@ -1,9 +1,13 @@
 # README
 
 ## Introduction
-Welcome to the Quantiacs Python Trading Library (QNT), a comprehensive platform for quantitative finance and algorithmic trading. This library is designed for both beginners and seasoned traders, enabling the development and testing of trading algorithms.
+
+Welcome to the Quantiacs Python Trading Library (QNT), a comprehensive platform for quantitative finance and algorithmic
+trading. This library is designed for both beginners and seasoned traders, enabling the development and testing of
+trading algorithms.
 
 Discover more about Quantiacs:
+
 - **Website**: [Quantiacs.com](https://quantiacs.com)
 - **Detailed Documentation**: [Quantiacs Documentation](https://quantiacs.com/documentation/en/)
 
@@ -18,15 +22,22 @@ Discover more about Quantiacs:
 
 Quantiacs hosts a variety of quant competitions, catering to different asset classes and investment styles:
 
-- [The Classic Quantiacs Futures Contest](https://quantiacs.com/leaderboard/15): A mainstay contest focusing on futures trading.
+- [The Classic Quantiacs Futures Contest](https://quantiacs.com/leaderboard/15): A mainstay contest focusing on futures
+  trading.
 - [The Crypto Bitcoin Futures Contest](https://quantiacs.com/leaderboard/15): Tailored for trading Bitcoin futures.
-- [The Crypto Top-10 Long-Only Contest](https://quantiacs.com/leaderboard/16): Concentrating on a long-only strategy in the top 10 cryptocurrencies.
-- [The Crypto Top-10 Long-Short Contest](https://quantiacs.com/leaderboard/17): Involves both long and short positions in the top 10 cryptocurrencies.
+- [The Crypto Top-10 Long-Only Contest](https://quantiacs.com/leaderboard/16): Concentrating on a long-only strategy in
+  the top 10 cryptocurrencies.
+- [The Crypto Top-10 Long-Short Contest](https://quantiacs.com/leaderboard/17): Involves both long and short positions
+  in the top 10 cryptocurrencies.
 
 ### Current Opportunity
-- [The Q21 NASDAQ-100 Long-Short Fundamental Contest](https://quantiacs.com/contest): A specialized contest focusing on long-short strategies in the NASDAQ-100, emphasizing fundamental analysis.
 
-Since 2014, Quantiacs has hosted numerous quantitative trading contests, allocating over 38 million USD to winning algorithms in futures markets. Since 2021, the platform has expanded to include contests for predicting futures, cryptocurrencies, and stocks.
+- [The Q21 NASDAQ-100 Long-Short Fundamental Contest](https://quantiacs.com/contest): A specialized contest focusing on
+  long-short strategies in the NASDAQ-100, emphasizing fundamental analysis.
+
+Since 2014, Quantiacs has hosted numerous quantitative trading contests, allocating over 38 million USD to winning
+algorithms in futures markets. Since 2021, the platform has expanded to include contests for predicting futures,
+cryptocurrencies, and stocks.
 
 ## Using QNT from Github
 
@@ -41,7 +52,10 @@ and ease of managing dependencies.
       ```bash
       conda create -n qntdev 'python>=3.10,<3.11' conda-forge::ta-lib
       conda activate qntdev
-      pip install 'ipywidgets==7.5' 'plotly==4.14' 'matplotlib==3.8.1' 'pandas==1.2.5' 'dash==1.21.0' git+https://github.com/quantiacs/toolbox.git
+      pip install 'ipywidgets==7.5' 'plotly==4.14' 'matplotlib==3.8.1' 'dash==1.21.0' git+https://github.com/quantiacs/toolbox.git
+      pip install 'cython==0.29.37'
+      pip install --no-build-isolation 'pandas==1.2.5'
+
       ```
     - *Optional*: Prevent auto-activation of this environment:
       ```bash
@@ -93,7 +107,9 @@ In step two, run the command
 ```bash
 conda create -n qntdev quantiacs-source::qnt 'python>=3.10,<3.11' conda-forge::ta-lib
 conda activate qntdev
-pip install 'ipywidgets==7.5' 'plotly==4.14' 'matplotlib==3.8.1' 'pandas==1.2.5' 'dash==1.21.0'
+pip install 'ipywidgets==7.5' 'plotly==4.14' 'matplotlib==3.8.1' 'dash==1.21.0'
+pip install 'cython==0.29.37'
+pip install --no-build-isolation 'pandas==1.2.5'
 ```
 
 ### Updating the conda environment
@@ -126,7 +142,9 @@ libraries.
       pyenv install 3.10.13 && \
       pyenv virtualenv 3.10.13 name_of_environment && \
       pyenv local name_of_environment && \
-      python -m pip install 'ipywidgets==7.5' 'plotly==4.14' 'matplotlib==3.8.1' 'pandas==1.2.5' 'dash==1.21.0' git+git://github.com/quantiacs/toolbox.git
+      python -m pip install 'ipywidgets==7.5' 'plotly==4.14' 'matplotlib==3.8.1' 'dash==1.21.0' git+git://github.com/quantiacs/toolbox.git
+      pip install 'cython==0.29.37'
+      pip install --no-build-isolation 'pandas==1.2.5'
       ```
 
    This command will:
@@ -158,7 +176,8 @@ python -m pip install --upgrade git+git://github.com/quantiacs/toolbox.git
 
 ## Google Colab support
 
-If you want to use Google Colab with a hosted runtime, start with this [notebook](https://quantiacs.com/documentation/en/_static/colab.ipynb).
+If you want to use Google Colab with a hosted runtime, start with
+this [notebook](https://quantiacs.com/documentation/en/_static/colab.ipynb).
 
 This notebook contains the necessary commands to configure a hosted runtime.
 
@@ -258,5 +277,6 @@ library installed and is properly set up to access market data.
 2. Run all cells to test your strategy in the Jupyter Notebook. Fix the errors if it is necessary. It is a good idea to
    run the file **precheck.ipynb**.
 
-3. Send your strategy to the Contest from the [Development](https://quantiacs.com/personalpage/strategies) area on your home page by clicking on the **Submit**
+3. Send your strategy to the Contest from the [Development](https://quantiacs.com/personalpage/strategies) area on your
+   home page by clicking on the **Submit**
    button:
