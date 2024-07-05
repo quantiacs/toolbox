@@ -161,7 +161,7 @@ libraries.
 Use this command in your environment to install the latest version from the git repository:
 
 ```
-python -m pip install --upgrade git+git://github.com/quantiacs/toolbox.git
+python -m pip install --upgrade git+https://github.com/quantiacs/toolbox.git
 ```
 
 ## Google Colab support
