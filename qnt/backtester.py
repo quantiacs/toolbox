@@ -195,7 +195,7 @@ def backtest_ml(
                     output, state = unpack_result(output)
                     if collect_all_states:
                         states.append(state)
-                    output = output.where(output.time >= t).where(output.time <= end_t).dropna('time', 'all')
+                    output = output.where(output.time >= t).where(output.time <= end_t).dropna('time', how='all')
                     outputs.append(output)
 
                 p.update(np.where(test_ts == end_t)[0].item())
@@ -436,7 +436,7 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
                 return
             if 'time' in output.dims:
                 output = output.sel(time=t)
-            output = output.drop(['field', 'time'], errors='ignore')
+            output = output.drop_vars(['field', 'time'], errors='ignore')
             outputs.append(output)
             if collect_all_states:
                 all_states.append(state)
@@ -522,11 +522,11 @@ def build_plots_dash(output, stat_global, stat_per_asset):
     print("Build plots...")
     try:
         import dash
-        import dash_core_components as dcc
-        import dash_html_components as html
+        from dash import dcc
+        from dash import html
         import pandas as pd
         import plotly.express as px
-        import dash_table
+        from dash import dash_table
         import qnt.graph as qngraph
 
         from dash.dependencies import Input, Output

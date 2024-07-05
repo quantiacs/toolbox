@@ -734,7 +734,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
-        # https://www.stock-analysis-on.net/NASDAQ/Company/Apple-Inc/Valuation/EV-to-EBITDA
+        # https://www.stock-analysis-on.net/NAS/Company/Apple-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(11257, indicator.loc['2015-10-28'].max() / 1000000)
         self.assertEqual(10505, indicator.loc['2016-10-26'].max() / 1000000)
         self.assertEqual(10157, indicator.loc['2017-11-03'].max() / 1000000)
@@ -749,7 +749,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
-        # https://www.stock-analysis-on.net/NASDAQ/Company/Apple-Inc/Valuation/EV-to-EBITDA
+        # https://www.stock-analysis-on.net/NAS/Company/Apple-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(733, indicator.loc['2015-10-28'].max() / 1000000)
         self.assertEqual(1456, indicator.loc['2016-10-26'].max() / 1000000)
         self.assertEqual(2323, indicator.loc['2017-11-03'].max() / 1000000)
@@ -764,7 +764,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
-        # https://www.stock-analysis-on.net/NASDAQ/Company/Apple-Inc/Valuation/EV-to-EBITDA
+        # https://www.stock-analysis-on.net/NAS/Company/Apple-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(84505, indicator.loc['2015-10-28'].max() / 1000000)
         self.assertEqual(73333, indicator.loc['2016-10-26'].max() / 1000000)
         self.assertEqual(76569, indicator.loc['2017-11-03'].max() / 1000000)
@@ -780,7 +780,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
-        # https://www.stock-analysis-on.net/NASDAQ/Company/Apple-Inc/Valuation/EV-to-EBITDA
+        # https://www.stock-analysis-on.net/NAS/Company/Apple-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(2233, indicator.loc['2016-01-29'].max() / 1000000)
         self.assertEqual(4186, indicator.loc['2017-02-10'].max() / 1000000)
         self.assertEqual(4107, indicator.loc['2018-02-02'].max() / 1000000)
@@ -796,7 +796,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
-        # https://www.stock-analysis-on.net/NASDAQ/Company/Amazoncom-Inc/Valuation/EV-to-EBITDA
+        # https://www.stock-analysis-on.net/NAS/Company/Amazoncom-Inc/Valuation/EV-to-EBITDA
         # self.assertEqual(2233, indicator.loc['2016-01-29'].max() / 1000000)
         self.assertEqual(8116, indicator.loc['2017-02-10'].max() / 1000000)
         self.assertEqual(11478, indicator.loc['2018-02-02'].max() / 1000000)
@@ -812,7 +812,7 @@ class TestBaseFundamentalData(unittest.TestCase):
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
-        # https://www.stock-analysis-on.net/NASDAQ/Company/Amazoncom-Inc/Valuation/EV-to-EBITDA
+        # https://www.stock-analysis-on.net/NAS/Company/Amazoncom-Inc/Valuation/EV-to-EBITDA
         self.assertEqual(8308, indicator.loc['2016-01-29'].max() / 1000000)
         self.assertEqual(12492, indicator.loc['2017-02-10'].max() / 1000000)
         self.assertEqual(16132, indicator.loc['2018-02-02'].max() / 1000000)
@@ -871,7 +871,7 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     indicator = indicators.sel(field='ebitda_use_income_before_taxes').to_pandas()
     #     print_normed(indicator, 'NASDAQ:FB')
     #
-    #     # https://www.stock-analysis-on.net/NASDAQ/Company/Facebook-Inc/Valuation/EV-to-EBITDA
+    #     # https://www.stock-analysis-on.net/NAS/Company/Facebook-Inc/Valuation/EV-to-EBITDA
     #     self.assertEqual(14859, indicator.loc['2017-02-03'].max() / 1000000)
     #     self.assertEqual(23619, indicator.loc['2018-02-01'].max() / 1000000)
     #     self.assertEqual(29676, indicator.loc['2019-01-31'].max() / 1000000)
@@ -1328,7 +1328,7 @@ def get_data_new_for(asset_names, indicators_names):
     #                                assets=asset_names,
     #                                forward_order=True)
 
-    market_data = qndata.stocks.load_ndx_data(min_date="2010-01-01", max_date="2021-09-28",
+    market_data = qndata.stocks.load_data(min_date="2010-01-01", max_date="2021-09-28",
                                               dims=("time", "field", "asset"),
                                               assets=asset_names,
                                               forward_order=True)

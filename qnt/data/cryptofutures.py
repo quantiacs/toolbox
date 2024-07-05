@@ -44,10 +44,9 @@ def load_data(
         assets = xr.DataArray(assets, dims=[ds.ASSET], coords={ds.ASSET:assets})
         arr = arr.broadcast_like(assets).sel(asset=assets)
 
-    if forward_order:
-        arr = arr.sel(**{ds.TIME: slice(None, None, -1)})
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
 
-    arr = arr.dropna(ds.TIME, 'all')
+    arr = arr.dropna(ds.TIME, how='all')
 
     arr.name = "cryptofutures"
     return arr.transpose(*dims)

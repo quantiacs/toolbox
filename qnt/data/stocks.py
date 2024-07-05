@@ -73,10 +73,10 @@ def load_data(
     data = load_origin_data(assets=assets, min_date=min_date, max_date=max_date, tail=tail, stocks_type=stocks_type)
     log_info("Data loaded " + str(round(time.time() - t)) + "s")
     if stocks_type == '':
+        data = data.sortby(ds.TIME, ascending=True)
         data = adjust_by_splits(data, False)
     data = data.transpose(*dims)
-    if forward_order:
-        data = data.sel(**{ds.TIME: slice(None, None, -1)})
+    data = data.sortby(ds.TIME, ascending=forward_order)
     data.name = "stocks_nasdaq100" if stocks_type.lower() in ["nasdaq100", "ndx100"] else "stocks"
     return data
 
@@ -218,7 +218,7 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
         np.sort(whole.coords[ds.ASSET])
     ]
 
-    return whole.dropna(ds.TIME, 'all')
+    return whole.dropna(ds.TIME, how='all')
 
 
 def load_origin_data_chunk(assets, min_date, max_date, stocks_type):  # min_date and max_date - iso date str

@@ -82,8 +82,8 @@ def create_and_train_models(data):
     models = dict()
 
     for asset_name in asset_name_all:
-        target_cur = target_all.sel(asset=asset_name).dropna('time', 'any')
-        features_cur = features_all.sel(asset=asset_name).dropna('time', 'any')
+        target_cur = target_all.sel(asset=asset_name).dropna('time', how='any')
+        features_cur = features_all.sel(asset=asset_name).dropna('time', how='any')
 
         # align features and targets
         target_for_learn_df, feature_for_learn_df = xr.align(target_cur, features_cur, join='inner')
@@ -113,7 +113,7 @@ def predict(models, data):
         if asset_name in models:
             model = models[asset_name]
             features_all = get_features(data)
-            features_cur = features_all.sel(asset=asset_name).dropna('time','any')
+            features_cur = features_all.sel(asset=asset_name).dropna('time',how='any')
             if len(features_cur.time) < 1:
                 continue
             try:

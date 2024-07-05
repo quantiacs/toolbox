@@ -23,7 +23,7 @@ def normalize(output, per_asset=False):
             s = 1 if s < 1 else s
         output = output / s
     try:
-        output = output.drop(ds.FIELD)
+        output = output.drop_vars(ds.FIELD)
     except ValueError:
         pass
     return output
@@ -48,7 +48,7 @@ def clean(output, data, kind=None, debug=True):
     if kind is None:
         kind = data.name
 
-    output = output.drop(ds.FIELD, errors='ignore')
+    output = output.drop_vars(ds.FIELD, errors='ignore')
 
     with LogSettings(err2info=True):
         log_info("Output cleaning...")
@@ -68,7 +68,7 @@ def clean(output, data, kind=None, debug=True):
         output = output.isel(asset=idx)
 
         if single_day:
-            output = output.drop(ds.TIME, errors='ignore')
+            output = output.drop_vars(ds.TIME, errors='ignore')
             output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))
         else:
             log_info("ffill if the current price is None...")
@@ -105,14 +105,14 @@ def clean(output, data, kind=None, debug=True):
                         or kind == 'crypto_daily' or kind == 'cryptodaily' \
                         or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
                     output = output.where(data.sel(field='is_liquid') > 0)
-                output = output.dropna('asset', 'all').dropna('time', 'all').fillna(0)
+                output = output.dropna('asset', how='all').dropna('time', how='all').fillna(0)
                 output = normalize(output)
             else:
                 log_info("Ok.")
 
         if kind == 'stocks_long' or kind == 'crypto_daily_long':
             log_info("Check positive positions...")
-            neg = output.where(output < 0).dropna(ds.TIME, 'all')
+            neg = output.where(output < 0).dropna(ds.TIME, how='all')
             if len(neg.time) > 0:
                 log_info("WARNING! Output contains negative positions. Clean...")
                 output = output.where(output >= 0).fillna(0)
@@ -131,7 +131,7 @@ def clean(output, data, kind=None, debug=True):
 
         if kind == "crypto":
             log_info("Check BTC...")
-            if output.where(output != 0).dropna("asset", "all").coords[ds.ASSET].values.tolist() != ['BTC']:
+            if output.where(output != 0).dropna("asset", how="all").coords[ds.ASSET].values.tolist() != ['BTC']:
                 log_info("WARNING! Output contains not only BTC.")
                 log_info("Fixing...")
                 output=output.sel(asset=['BTC'])
@@ -189,7 +189,7 @@ def check(output, data, kind=None, check_correlation=True):
 
         if kind == "crypto":
             log_info("Check BTC...")
-            if output.where(output != 0).dropna("asset", "all").coords[ds.ASSET].values.tolist() != ['BTC']:
+            if output.where(output != 0).dropna("asset", how="all").coords[ds.ASSET].values.tolist() != ['BTC']:
                 log_err("ERROR! Output contains not only BTC.\n")
                 log_err("Remove the other assets from the output or use qnt.output.clean")
             else:
@@ -219,7 +219,7 @@ def check(output, data, kind=None, check_correlation=True):
 
                 if kind == 'stocks_long' or kind == 'crypto_daily_long':
                     log_info("Check positive positions...")
-                    neg = output.where(output < 0).dropna(ds.TIME, 'all')
+                    neg = output.where(output < 0).dropna(ds.TIME, how='all')
                     if len(neg.time) > 0:
                         log_err("ERROR! Output contains negative positions.")
                         log_err("Drop all negative positions.")
@@ -260,7 +260,7 @@ def calc_sharpe_ratio_for_check(data, output, kind=None, check_dates=True):
 
     start_date = qns.get_default_is_start_date_for_type(kind)
     sdd = pd.Timestamp(start_date)
-    osd = pd.Timestamp(output.where(abs(output).sum('asset') > 0).dropna('time', 'all').time.min().values)
+    osd = pd.Timestamp(output.where(abs(output).sum('asset') > 0).dropna('time', how='all').time.min().values)
     dsd = pd.Timestamp(data.time.min().values)
     if check_dates:
         if (dsd - sdd).days > 10:

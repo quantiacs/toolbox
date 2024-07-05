@@ -239,7 +239,7 @@ def arrange_data(data, target_weights, per_asset, *additional_series):
     :param additional_series:
     :return:
     """
-    data = data.dropna(ds.ASSET, 'all').dropna(ds.TIME, 'all')
+    data = data.dropna(ds.ASSET, how='all').dropna(ds.TIME, how='all')
     target_weights, data = xr.align(target_weights, data, join='right')
     ra1 = []
     for a in additional_series:
@@ -266,7 +266,7 @@ def arrange_data(data, target_weights, per_asset, *additional_series):
             a = a.sel(asset=assets)
         ra2.append(a)
 
-    target_weights = target_weights.drop(ds.FIELD, errors='ignore')
+    target_weights = target_weights.drop_vars(ds.FIELD, errors='ignore')
 
     return (adjusted_data, target_weights, *ra2)
 
@@ -446,7 +446,7 @@ def calc_avg_turnover(portfolio_history, equity, data, max_periods=None, min_per
     min_periods = min(min_periods, len(turnover.coords[ds.TIME]))
     turnover = turnover.rolling({ds.TIME: max_periods}, min_periods=min_periods).mean()
     try:
-        turnover = turnover.drop(ds.FIELD)
+        turnover = turnover.drop_vars(ds.FIELD)
     except ValueError:
         pass
     return turnover
@@ -491,7 +491,7 @@ def calc_avg_holding_time(portfolio_history,
         log = log2d
 
         try:
-            log = log.drop(ds.ASSET)
+            log = log.drop_vars(ds.ASSET)
         except ValueError:
             pass
 
@@ -504,7 +504,7 @@ def calc_avg_holding_time(portfolio_history,
               .rolling({ds.TIME: max_periods}, min_periods=min_periods).sum()
 
     try:
-        res = res.drop(ds.FIELD)
+        res = res.drop_vars(ds.FIELD)
     except ValueError:
         pass
 
@@ -554,8 +554,8 @@ def calc_non_liquid(data, portfolio_history):
     else:
         non_liquid = xr.full_like(adj_data.loc[f.CLOSE], np.nan)
     non_liquid = non_liquid.where(abs(non_liquid) > 0)
-    non_liquid = non_liquid.dropna(ds.ASSET, 'all')
-    non_liquid = non_liquid.dropna(ds.TIME, 'all')
+    non_liquid = non_liquid.dropna(ds.ASSET, how='all')
+    non_liquid = non_liquid.dropna(ds.TIME, how='all')
     return non_liquid
 
 
@@ -569,7 +569,7 @@ def find_missed_dates(output, data):
         data_ts = data_ts.where(data.sel({ds.FIELD: f.IS_LIQUID}) > 0)
     else:
         data_ts = data_ts.where(data.sel({ds.FIELD: f.CLOSE}) > 0)
-    data_ts = data_ts.dropna(ds.TIME, 'all').coords[ds.TIME]
+    data_ts = data_ts.dropna(dim=ds.TIME, how='all').coords[ds.TIME]
     data_ts = np.sort(data_ts.values)
     missed = np.setdiff1d(data_ts, out_ts)
     return missed
