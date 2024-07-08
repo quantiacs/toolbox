@@ -53,7 +53,7 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
         min_date = (pd.Timestamp(qnt.stats.get_default_is_start_date_for_type(data_type))).to_pydatetime()
         data = qnt.data.load_data_by_type(data_type, min_date=min_date)
         if 'is_liquid' in data.field:
-            data = data.where(data.sel(field='is_liquid') > 0).dropna('time', 'all')
+            data = data.where(data.sel(field='is_liquid') > 0).dropna('time', how='all')
         data = data.time
         dates = [data.isel(time=-1).values, data.isel(time=1).values] \
                 + [data.isel(time=round(len(data) * (i + 1) / (passes - 1))).values for i in range(passes - 2)]
@@ -175,7 +175,7 @@ def assemble_output(add_mode='all'):
         date = datetime.date.fromisoformat(date)
         fn = result_dir + "/" + f
         _output = load_output(fn, date)
-        _output = _output.where(_output.time <= np.datetime64(date)).dropna('time', 'all')
+        _output = _output.where(_output.time <= np.datetime64(date)).dropna('time', how='all')
         if len(_output) == 0:
             continue
         if output is None:
@@ -183,9 +183,9 @@ def assemble_output(add_mode='all'):
             output = _output
         else:
             if add_mode == 'all':
-                _output = _output.where(_output.time > output.time.max()).dropna('time', 'all')
+                _output = _output.where(_output.time > output.time.max()).dropna('time', how='all')
             elif add_mode == 'one':
-                _output = _output.where(_output.time == np.datetime64(date)).dropna('time', 'all')
+                _output = _output.where(_output.time == np.datetime64(date)).dropna('time', how='all')
             else:
                 raise Exception("wrong add_mode")
             if len(_output) == 0:
@@ -215,7 +215,7 @@ def check_output(output, data_type='stocks'):
     in_sample_points = qnt.stats.get_default_is_period_for_type(data_type)
 
     min_date = qnt.stats.get_default_is_start_date_for_type(data_type)
-    output_tail = output.where(output.time > np.datetime64(min_date)).dropna('time', 'all')
+    output_tail = output.where(output.time > np.datetime64(min_date)).dropna('time', how='all')
     if len(output_tail) < in_sample_points:
         log_err("ERROR! In sample period does not contain enough points. " +
                 str(len(output_tail)) + " < " + str(in_sample_points))

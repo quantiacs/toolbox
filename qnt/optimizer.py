@@ -175,7 +175,7 @@ def standard_stats_function_multipass(data, output, lookback_period):
 
 
 def fast_stats_function(data, output):
-    close = data.sel(field='close').dropna('time', 'all').fillna(0)
+    close = data.sel(field='close').dropna('time', how='all').fillna(0)
     prev_output = output.shift(time=1)
     prev_close = close.shift(time=1)
     returns = (close - prev_close) * prev_output / prev_close
@@ -361,8 +361,8 @@ def build_plot_dash(results):
     option_list = [{'label': k, 'value': k} for k in field_list]
 
     import dash
-    import dash_core_components as dcc
-    import dash_html_components as html
+    from dash import dcc
+    from dash import html
     from dash.dependencies import Input, Output, State
 
     app = dash.Dash(__name__)

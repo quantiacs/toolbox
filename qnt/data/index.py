@@ -56,10 +56,9 @@ def major_load_data(
         arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
-    if forward_order:
-        arr = arr.sel(**{ds.TIME: slice(None, None, -1)})
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
 
-    arr = arr.dropna(ds.TIME, 'all')
+    arr = arr.dropna(ds.TIME, how='all')
 
     arr.name = "major_indexes"
     return arr.transpose(*dims)
@@ -150,8 +149,7 @@ def load_data(
         arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
-    if forward_order:
-        arr = arr.sel(**{ds.TIME: slice(None, None, -1)})
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
 
     if assets is not None:
         assets = list(set(assets))
@@ -159,7 +157,7 @@ def load_data(
         assets = xr.DataArray(assets, dims=[ds.ASSET], coords={ds.ASSET:assets})
         arr = arr.broadcast_like(assets).sel(asset=assets)
 
-    arr = arr.dropna(ds.TIME, 'all')
+    arr = arr.dropna(ds.TIME, how='all')
 
     arr.name = "indexes"
     return arr.transpose(*dims)
