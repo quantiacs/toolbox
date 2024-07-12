@@ -88,6 +88,13 @@ and ease of managing dependencies.
       ```bash
       jupyter notebook
       ```
+    - To use PyCharm IDE with your created Conda environment, follow these steps:
+        1. Open PyCharm.
+        2. Navigate to `Settings` -> `Project` -> `Python Interpreter`.
+        3. Click on `Add Interpreter`.
+        4. Select `Conda Environment`.
+        5. Specify the path to the created Conda environment.
+
 
 
 6. **Contest Participation**:
@@ -167,12 +174,30 @@ python -m pip install --upgrade git+https://github.com/quantiacs/toolbox.git
 ## Google Colab support
 
 If you want to use Google Colab with a hosted runtime, start with
-this [notebook](https://quantiacs.com/documentation/en/_static/colab.ipynb).
-
-This notebook contains the necessary commands to configure a hosted runtime.
+this [notebook](https://quantiacs.com/documentation/en/_static/colab.ipynb). This notebook contains the necessary commands to configure a hosted runtime.
 
 If you use colab with a local runtime, then you can use regular conda environment. Go to the head of this page and
 follow the instructions for conda.
+
+At first, setup the toolbox from github using pip:
+
+```shell
+! pip install git+https://github.com/quantiacs/toolbox.git 2>/dev/null
+```
+
+Then install TA-Lib (indicators library) if you need it.
+
+```shell
+!wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+!tar -xzvf ta-lib-0.4.0-src.tar.gz
+%cd ta-lib
+!./configure --prefix=/usr
+! make
+!make install
+!pip install Ta-Lib
+
+import talib
+```
 
 ## Working example Jupyter Notebook or Jupyter Lab
 
