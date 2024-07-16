@@ -1,33 +1,32 @@
-import io
 import random
 import itertools
 import copy
-import contextlib
 from functools import reduce
+import inspect
 import operator
 import logging
 import math
 import progressbar
 import multiprocessing
 import numpy as np
-import warnings
 
 import qnt.backtester as qnbt
+import qnt.log as qnlog  
 import qnt.stats as qns
 import qnt.graph as qng
 import qnt.ta as qnta
 import tabulate
 
 def optimize_strategy(data, output_function, argument_generator,
-                      stats_function=None, stats_to_weight=None,
+                      stats_function=None, stats_to_weight=None, lookback_period = 365,
                       workers=1):
     """
-
     :param data: the input data for your strategy
     :param output_function: your strategy, generates outputs by data
-    :param argument_generator: generates additional arguments fot your strategy
-    :param stats_function: calculate statistics for one pass see standard_stats_function
+    :param argument_generator: generates additional arguments for your strategy
+    :param stats_function: calculate statistics for the strategy, see standard_stats_function
     :param stats_to_weight: converts statistics to weight in order to select the best iteration
+    :param lookback_period: lookback period, only for the multi-pass backtester
     :param workers: parallel workers count, you can set it equal to os.cpu_count()
     :return:
     """
@@ -37,41 +36,14 @@ def optimize_strategy(data, output_function, argument_generator,
 
     if stats_to_weight is None:
         stats_to_weight = standard_stats_to_weight
-
+        
     return optimize(
-        TargetFunction(data, output_function, stats_function),
+        TargetFunction(data, output_function, stats_function, lookback_period),
         argument_generator,
         stats_to_weight,
         workers
     )
 
-def optimize_strategy_multipass(data, state, output_function, argument_generator,
-                      stats_function=None, stats_to_weight=None, lookback_period = 365,
-                      workers=1):
-    """
-
-    :param data: the input data for your strategy
-    :param state: empty state to initialize the function
-    :param output_function: your strategy, generates outputs by data
-    :param argument_generator: generates additional arguments for your strategy
-    :param stats_function: calculate statistics in multi-pass see standard_stats_function_multipass
-    :param stats_to_weight: converts statistics to weight in order to select the best iteration
-    :param workers: parallel workers count, you can set it equal to os.cpu_count()
-    :return:
-    """
-
-    if stats_function is None:
-        stats_function = standard_stats_function_multipass
-
-    if stats_to_weight is None:
-        stats_to_weight = standard_stats_to_weight
-
-    return optimize(
-        TargetFunctionStateful(data, state, output_function, stats_function, lookback_period),
-        argument_generator,
-        stats_to_weight,
-        workers
-    )
 
 def optimize(target_function, argument_generator, result_to_weight, workers=1):
     iterations = []
@@ -113,7 +85,7 @@ def optimize(target_function, argument_generator, result_to_weight, workers=1):
         w.terminate()
         w.join()
 
-    return dict(iterations=iterations, best_iterations=sorted(iterations, key=lambda i: i.get('weight', float('-inf')), reverse=True)[:10])
+    return dict(iterations=iterations, best_iteration=max(*iterations, key=lambda i: i.get('weight', float('-inf'))))
 
 
 def random_range_args_generator(iterations, **ranges):
@@ -140,37 +112,28 @@ def full_range_args_generator(**ranges):
     return IterWithLen(res, length)
 
 
-def standard_stats_function(data, output):
+def standard_stats_function(data, output, lookback_period = 365):
     """
     Calculates statistics for the iteration output.
     :param data: market data
     :param output: weights
+    :param lookback_period: lookback period for the multi-pass backtester
     :return: dict
     """
-    start_date = qns.get_default_is_start_date_for_type(data.name)
-    stat = qns.calc_stat(data, output.sel(time=slice(start_date, None)))
-    return stat.isel(time=-1).to_pandas().to_dict()
-
-
-def standard_stats_function_multipass(data, output, lookback_period):
-    """
-    Calculates statistics for the iteration output.
-    :param data: market data
-    :param output: strategy function
-    :param lookback_period: lookback period for the backtester
-    :return: dict
-    """
-    start_date = qns.get_default_is_start_date_for_type(data.name)
-    with contextlib.redirect_stdout(io.StringIO()), warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        weights = qnbt.backtest(competition_type=data.name, 
-                        lookback_period=lookback_period,
-                        start_date=start_date,
-                        strategy=output,
-                        analyze=False,
-                        build_plots=False,
-                        collect_all_states=False)[0]
-    stat = qns.calc_stat(data, weights.sel(time=slice(start_date, None)))
+    start_date = str(max((data.time[0].values), np.datetime64(qns.get_default_is_start_date_for_type(data.name)))).split('T')[0]
+    args = inspect.getfullargspec(output).args
+    with qnlog.Settings(info=False,err=False):
+        if 'state' in args:
+            output = qnbt.backtest(competition_type=data.name, 
+                            lookback_period=lookback_period,
+                            start_date=start_date,
+                            strategy=output,
+                            analyze=False,
+                            build_plots=False,
+                            collect_all_states=False)[0]
+            stat = qns.calc_stat(data, output.sel(time=slice(start_date, None)))
+        else:
+            stat = qns.calc_stat(data, output(data).sel(time=slice(start_date, None)))
     return stat.isel(time=-1).to_pandas().to_dict()
 
 
@@ -220,24 +183,8 @@ class IterWithLen(object):
 
 
 class TargetFunction(object):
-    def __init__(self, data, output_func, stats_func):
+    def __init__(self, data, output_func, stats_func, lookback_period):
         self.data = data
-        self.output_func = output_func
-        self.stats_func = stats_func
-
-    def __call__(self, **args):
-        try:
-            output = self.output_func(self.data, **args)
-            stats = self.stats_func(self.data, output)
-            return stats
-        except:
-            logging.exception("unexpected")
-            
-            
-class TargetFunctionStateful(object):
-    def __init__(self, data, state, output_func, stats_func, lookback_period):
-        self.data = data
-        self.state = state
         self.output_func = output_func
         self.stats_func = stats_func
         self.lookback_period = lookback_period
@@ -441,7 +388,7 @@ def build_plot_dash(results):
 
 
 def prepare_data_for_chart(results):
-    arg_fields = [k for k in results['best_iterations'][0]['args'].keys()]
+    arg_fields = [k for k in results['best_iteration']['args'].keys()]
     stat_fields = [k for k in [
         "sharpe_ratio",
         "max_drawdown",
@@ -450,7 +397,7 @@ def prepare_data_for_chart(results):
         "equity",
         "avg_turnover",
         "avg_holding_time",
-    ] if k in results['best_iterations'][0]['result'].keys()]
+    ] if k in results['best_iteration']['result'].keys()]
     field_list = arg_fields + stat_fields
 
     data = [dict(list(zip(arg_fields, i['args'].values()))
