@@ -14,6 +14,7 @@ import qnt.stats
 from .data import id_translation as idt
 import qnt.output
 import sys
+from qnt.data.common import ds
 
 fractions_fn = "../fractions.nc.gz"
 last_data_fn = "../last_data.txt"
@@ -135,11 +136,14 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
                 if len(non_liquid.time) > 0:
                     log_err("ERROR! The output contains illiquid positions.")
 
-            missed = qnt.stats.find_missed_dates(output, data)
-            if len(missed) > 0:
-                log_err("ERROR: some dates are missed in the output.", missed)
+            if len(output.coords[ds.TIME].values) == 0:
+                log_err("WARNING! Output is empty.")
             else:
-                log_info("There are no missed dates.")
+                missed = qnt.stats.find_missed_dates(output, data)
+                if len(missed) > 0:
+                    log_err("ERROR: some dates are missed in the output.", missed)
+                else:
+                    log_info("There are no missed dates.")
 
             del data
 

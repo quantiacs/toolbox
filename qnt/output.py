@@ -93,22 +93,25 @@ def clean(output, data, kind=None, debug=True):
 
         if not single_day:
             log_info("Check missed dates...")
-            missed_dates = qns.find_missed_dates(output, data)
-            if len(missed_dates) > 0:
-                log_info("WARNING! Output contain missed dates.")
-                log_info("Adding missed dates and set zero...")
-                add = xr.concat([output.isel(time=-1)] * len(missed_dates), pd.DatetimeIndex(missed_dates, name="time"))
-                add = xr.full_like(add, np.nan)
-                output = xr.concat([output, add], dim='time')
-                output = output.fillna(0)
-                if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100"\
-                        or kind == 'crypto_daily' or kind == 'cryptodaily' \
-                        or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
-                    output = output.where(data.sel(field='is_liquid') > 0)
-                output = output.dropna('asset', how='all').dropna('time', how='all').fillna(0)
-                output = normalize(output)
+            if len(output.coords[ds.TIME].values) == 0:
+                log_info("WARNING! Output is empty.")
             else:
-                log_info("Ok.")
+                missed_dates = qns.find_missed_dates(output, data)
+                if len(missed_dates) > 0:
+                    log_info("WARNING! Output contain missed dates.")
+                    log_info("Adding missed dates and set zero...")
+                    add = xr.concat([output.isel(time=-1)] * len(missed_dates), pd.DatetimeIndex(missed_dates, name="time"))
+                    add = xr.full_like(add, np.nan)
+                    output = xr.concat([output, add], dim='time')
+                    output = output.fillna(0)
+                    if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100"\
+                            or kind == 'crypto_daily' or kind == 'cryptodaily' \
+                            or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
+                        output = output.where(data.sel(field='is_liquid') > 0)
+                    output = output.dropna('asset', how='all').dropna('time', how='all').fillna(0)
+                    output = normalize(output)
+                else:
+                    log_info("Ok.")
 
         if kind == 'stocks_long' or kind == 'crypto_daily_long':
             log_info("Check positive positions...")
@@ -174,12 +177,15 @@ def check(output, data, kind=None, check_correlation=True):
 
         if not single_day:
             log_info("Check missed dates...")
-            missed_dates = qns.find_missed_dates(output, data)
-            if len(missed_dates) > 0:
-                log_err("ERROR! Some dates were missed)")
-                log_err("Your strategy dropped some days, your strategy should produce a continuous series.")
+            if len(output.coords[ds.TIME].values) == 0:
+                log_err("WARNING! Output is empty.")
             else:
-                log_info("Ok.")
+                missed_dates = qns.find_missed_dates(output, data)
+                if len(missed_dates) > 0:
+                    log_err("ERROR! Some dates were missed)")
+                    log_err("Your strategy dropped some days, your strategy should produce a continuous series.")
+                else:
+                    log_info("Ok.")
             track_event("OUTPUT_CHECK")
 
         if kind == "stocks" or kind == "stocks_long":

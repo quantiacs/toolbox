@@ -698,9 +698,12 @@ def calc_stat(data, portfolio_history,
     if roll_slippage_factor is None:
         roll_slippage_factor = get_default_slippage(data)
 
-    missed_dates = find_missed_dates(portfolio_history, data)
-    if len(missed_dates) > 0:
-        log_err("WARNING: some dates are missed in the portfolio_history")
+    if len(portfolio_history.coords[ds.TIME].values) == 0:
+        log_err("WARNING! Output is empty.")
+    else:
+        missed_dates = find_missed_dates(portfolio_history, data)
+        if len(missed_dates) > 0:
+            log_err("WARNING: some dates are missed in the portfolio_history")
 
     portfolio_history = output_normalize(portfolio_history, per_asset)
 
