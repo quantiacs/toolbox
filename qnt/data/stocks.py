@@ -14,7 +14,7 @@ def load_list(
     """
     :return: list of dicts with info for all tickers
     """
-    track_event("DATA_STOCKS_LIST")
+    track_event("DATA_STOCKS_LIST_{}".format(stocks_type.upper()))
     max_date = parse_date(max_date)
 
     if min_date is not None:
@@ -151,7 +151,7 @@ BATCH_LIMIT = 300000
 
 def load_origin_data(assets=None, min_date=None, max_date=None,
                      tail: tp.Union[datetime.timedelta, float, int] = 4 * 365, stocks_type=''):
-    track_event("DATA_STOCKS_SERIES")
+    track_event("DATA_STOCKS_SERIES_{}".format(stocks_type.upper()))
     setup_ids()
 
     if assets is None:
