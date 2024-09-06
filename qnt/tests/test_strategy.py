@@ -10,10 +10,8 @@ import os
 os.environ['API_KEY'] = "default"
 
 import xarray as xr
-import qnt.data as qndata
 import qnt.output as qnout
 import qnt.ta as qnta
-import qnt.stats as qns
 import qnt.stats as qnstats
 
 
@@ -66,6 +64,27 @@ def calculate_weights(data):
     weights_new = weights_new.sel(time=slice("2006-01-01", None))
 
     return qnout.clean(output=weights_new, data=data, kind="stocks_nasdaq100")
+
+
+def calculate_weights_ta(data):
+    fields = data.sel(field='high')
+    k, d = qnta.stochastic(data.sel(field='high'), data.sel(field='low'), data.sel(field='close'), 30)
+    macd_line, signal_line, hist = qnta.macd(fields, 30)
+    indicators = [
+        qnta.sma(fields, 30),
+        qnta.ema(fields, 30),
+        qnta.dema(fields, 30),
+        qnta.rsi(fields, 30),
+        qnta.roc(fields, 30),
+        qnta.trix(fields, 30),
+        qnta.atr(data.sel(field='high'), data.sel(field='low'), data.sel(field='close'), 30),
+        qnta.wma(fields, 30),
+        k, d, macd_line, signal_line, hist
+    ]
+
+    total_sum = sum(indicators)
+
+    return total_sum.fillna(0)
 
 
 def load_data_and_create_data_array(filename, dims, transpose_order):
@@ -263,6 +282,204 @@ class TestBaseStatistic(unittest.TestCase):
                                     'time': '2023-10-26T00:00:00.000',
                                     'underwater': -0.1798140221,
                                     'volatility': 0.246305734}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'equity', 'type': 'number'},
+                                                {'name': 'relative_return', 'type': 'number'},
+                                                {'name': 'volatility', 'type': 'number'},
+                                                {'name': 'underwater', 'type': 'number'},
+                                                {'name': 'max_drawdown', 'type': 'number'},
+                                                {'name': 'sharpe_ratio', 'type': 'number'},
+                                                {'name': 'mean_return', 'type': 'number'},
+                                                {'name': 'bias', 'type': 'number'},
+                                                {'name': 'instruments', 'type': 'number'},
+                                                {'name': 'avg_turnover', 'type': 'number'},
+                                                {'name': 'avg_holding_time', 'type': 'number'}],
+                                     'pandas_version': '1.4.0',
+                                     'primaryKey': ['time']}}, json.loads(stat_tail))
+
+    def test_ta(self):
+        dir = os.path.abspath(os.curdir)
+
+        dims = ['field', 'time', 'asset']
+        data = load_data_and_create_data_array(f"{dir}/data/data_2005-01-01.nc", dims, dims)
+
+        weights = calculate_weights_ta(data)
+
+        stat = qnstats.calc_stat(data.sel(time=slice("2006-01-01", None)), weights)
+        stat_head_df = stat.to_pandas().head(20)
+        stat_head = stat_head_df.tail(8).to_json(orient="table")
+        self.assertEqual({'data': [{'avg_holding_time': 5.403206699,
+                                    'avg_turnover': 0.1172396991,
+                                    'bias': 1.0,
+                                    'equity': 1.0,
+                                    'instruments': 177.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 0.0,
+                                    'relative_return': 0.0,
+                                    'sharpe_ratio': None,
+                                    'time': '2006-01-20T00:00:00.000',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0},
+                                   {'avg_holding_time': 5.8232899207,
+                                    'avg_turnover': 0.1127922284,
+                                    'bias': 1.0,
+                                    'equity': 1.0,
+                                    'instruments': 177.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 0.0,
+                                    'relative_return': 0.0,
+                                    'sharpe_ratio': None,
+                                    'time': '2006-01-23T00:00:00.000',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0},
+                                   {'avg_holding_time': 6.2022043097,
+                                    'avg_turnover': 0.1079194804,
+                                    'bias': 1.0,
+                                    'equity': 1.0057016235,
+                                    'instruments': 177.0,
+                                    'max_drawdown': 0.0,
+                                    'mean_return': 0.100225586,
+                                    'relative_return': 0.0057016235,
+                                    'sharpe_ratio': 4.4392237851,
+                                    'time': '2006-01-24T00:00:00.000',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0225772772},
+                                   {'avg_holding_time': 6.6564639415,
+                                    'avg_turnover': 0.1042517229,
+                                    'bias': 1.0,
+                                    'equity': 1.0016806707,
+                                    'instruments': 177.0,
+                                    'max_drawdown': -0.0039981569,
+                                    'mean_return': 0.0268012049,
+                                    'relative_return': -0.0039981569,
+                                    'sharpe_ratio': 0.971593733,
+                                    'time': '2006-01-25T00:00:00.000',
+                                    'underwater': -0.0039981569,
+                                    'volatility': 0.0275847857},
+                                   {'avg_holding_time': 7.0491094129,
+                                    'avg_turnover': 0.101180465,
+                                    'bias': 1.0,
+                                    'equity': 1.0156166964,
+                                    'instruments': 177.0,
+                                    'max_drawdown': -0.0039981569,
+                                    'mean_return': 0.2582294939,
+                                    'relative_return': 0.0139126432,
+                                    'sharpe_ratio': 4.4446592837,
+                                    'time': '2006-01-26T00:00:00.000',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0580988277},
+                                   {'avg_holding_time': 7.5741173727,
+                                    'avg_turnover': 0.0991532498,
+                                    'bias': 1.0,
+                                    'equity': 1.0256836602,
+                                    'instruments': 177.0,
+                                    'max_drawdown': -0.0039981569,
+                                    'mean_return': 0.4262252403,
+                                    'relative_return': 0.0099121685,
+                                    'sharpe_ratio': 6.5322979965,
+                                    'time': '2006-01-27T00:00:00.000',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0652488972},
+                                   {'avg_holding_time': 7.9011714004,
+                                    'avg_turnover': 0.096228215,
+                                    'bias': 1.0,
+                                    'equity': 1.0272889472,
+                                    'instruments': 177.0,
+                                    'max_drawdown': -0.0039981569,
+                                    'mean_return': 0.4291605029,
+                                    'relative_return': 0.0015650897,
+                                    'sharpe_ratio': 6.757289561,
+                                    'time': '2006-01-30T00:00:00.000',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0635107463},
+                                   {'avg_holding_time': 8.2094209738,
+                                    'avg_turnover': 0.0933774664,
+                                    'bias': 1.0,
+                                    'equity': 1.0293025113,
+                                    'instruments': 177.0,
+                                    'max_drawdown': -0.0039981569,
+                                    'mean_return': 0.4389384182,
+                                    'relative_return': 0.0019600757,
+                                    'sharpe_ratio': 7.0876319579,
+                                    'time': '2006-01-31T00:00:00.000',
+                                    'underwater': 0.0,
+                                    'volatility': 0.0619301934}],
+                          'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
+                                                {'name': 'equity', 'type': 'number'},
+                                                {'name': 'relative_return', 'type': 'number'},
+                                                {'name': 'volatility', 'type': 'number'},
+                                                {'name': 'underwater', 'type': 'number'},
+                                                {'name': 'max_drawdown', 'type': 'number'},
+                                                {'name': 'sharpe_ratio', 'type': 'number'},
+                                                {'name': 'mean_return', 'type': 'number'},
+                                                {'name': 'bias', 'type': 'number'},
+                                                {'name': 'instruments', 'type': 'number'},
+                                                {'name': 'avg_turnover', 'type': 'number'},
+                                                {'name': 'avg_holding_time', 'type': 'number'}],
+                                     'pandas_version': '1.4.0',
+                                     'primaryKey': ['time']}}, json.loads(stat_head))
+
+        stat_tail = stat.to_pandas().tail().to_json(orient="table")
+        self.assertEqual({'data': [{'avg_holding_time': 55.3650244403,
+                                    'avg_turnover': 0.0344372677,
+                                    'bias': 1.0,
+                                    'equity': 8.5569523417,
+                                    'instruments': 244.0,
+                                    'max_drawdown': -0.5457454949,
+                                    'mean_return': 0.1282869071,
+                                    'relative_return': -0.0125095042,
+                                    'sharpe_ratio': 0.5881131398,
+                                    'time': '2023-10-20T00:00:00.000',
+                                    'underwater': -0.1187989924,
+                                    'volatility': 0.2181330401},
+                                   {'avg_holding_time': 55.3681497711,
+                                    'avg_turnover': 0.0344355257,
+                                    'bias': 1.0,
+                                    'equity': 8.5603986428,
+                                    'instruments': 244.0,
+                                    'max_drawdown': -0.5457454949,
+                                    'mean_return': 0.1282820678,
+                                    'relative_return': 0.0004027487,
+                                    'sharpe_ratio': 0.5881565464,
+                                    'time': '2023-10-23T00:00:00.000',
+                                    'underwater': -0.1184440899,
+                                    'volatility': 0.2181087136},
+                                   {'avg_holding_time': 55.3700804061,
+                                    'avg_turnover': 0.0344321047,
+                                    'bias': 1.0,
+                                    'equity': 8.6462073614,
+                                    'instruments': 244.0,
+                                    'max_drawdown': -0.5457454949,
+                                    'mean_return': 0.1288843029,
+                                    'relative_return': 0.0100239162,
+                                    'sharpe_ratio': 0.5909524455,
+                                    'time': '2023-10-24T00:00:00.000',
+                                    'underwater': -0.1096074474,
+                                    'volatility': 0.2180958956},
+                                   {'avg_holding_time': 55.380983874,
+                                    'avg_turnover': 0.0344312849,
+                                    'bias': 1.0,
+                                    'equity': 8.4650565279,
+                                    'instruments': 244.0,
+                                    'max_drawdown': -0.5457454949,
+                                    'mean_return': 0.1275115749,
+                                    'relative_return': -0.0209514792,
+                                    'sharpe_ratio': 0.5845635076,
+                                    'time': '2023-10-25T00:00:00.000',
+                                    'underwater': -0.1282624884,
+                                    'volatility': 0.2181312608},
+                                   {'avg_holding_time': 56.5752709478,
+                                    'avg_turnover': 0.0344288354,
+                                    'bias': 1.0,
+                                    'equity': 8.382361628,
+                                    'instruments': 244.0,
+                                    'max_drawdown': -0.5457454949,
+                                    'mean_return': 0.126859813,
+                                    'relative_return': -0.009768972,
+                                    'sharpe_ratio': 0.5816036997,
+                                    'time': '2023-10-26T00:00:00.000',
+                                    'underwater': -0.1367784677,
+                                    'volatility': 0.2181207119}],
                           'schema': {'fields': [{'name': 'time', 'type': 'datetime'},
                                                 {'name': 'equity', 'type': 'number'},
                                                 {'name': 'relative_return', 'type': 'number'},

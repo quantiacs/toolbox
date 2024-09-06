@@ -8,6 +8,8 @@ os.environ['API_KEY'] = "default"
 import qnt.data as qndata
 import qnt.stats as qnstats
 
+from qnt.ta.ndadapter import nd_np_adapter
+
 
 class Fields:
     OPEN = "open"
@@ -764,6 +766,42 @@ class TestBaseStatistic(unittest.TestCase):
                                                 {'name': 'BTC', 'type': 'number'}],
                                      'pandas_version': '1.4.0',
                                      'primaryKey': ['time']}}, json.loads(stat_head))
+
+    def test_1d_case(self):
+        def mock_function(x, y):
+            return x + y
+
+        nd_args = tuple([np.array([1, 2, 3]), np.array([4, 5, 6])])
+        plain_args = ()
+        expected_result = np.array([5, 7, 9])
+
+        result = nd_np_adapter(mock_function, nd_args, plain_args)
+
+        np.testing.assert_array_equal(result, expected_result)
+
+    def test_2d_case(self):
+        def mock_function(x, y):
+            return x * y
+
+        nd_args = tuple([np.array([[1, 2], [3, 4]]), np.array([[5, 6], [7, 8]])])
+        plain_args = ()
+        expected_result = np.array([[5, 12], [21, 32]])
+
+        result = nd_np_adapter(mock_function, nd_args, plain_args)
+
+        np.testing.assert_array_equal(result, expected_result)
+
+    def test_2d_case_with_plain_args(self):
+        def mock_function(x, y, z):
+            return x * y + z
+
+        nd_args = tuple([np.array([[1, 2], [3, 4]]), np.array([[5, 6], [7, 8]])])
+        plain_args = (np.array([1, 1]),)
+        expected_result = np.array([[6, 13], [22, 33]])
+
+        result = nd_np_adapter(mock_function, nd_args, plain_args)
+
+        np.testing.assert_array_equal(result, expected_result)
 
 
 if __name__ == '__main__':
