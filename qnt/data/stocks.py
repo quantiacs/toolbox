@@ -51,6 +51,12 @@ def load_ndx_list(min_date: tp.Union[str, datetime.date, None] = None,
     return load_list(min_date, max_date, tail, stocks_type='NASDAQ100')
 
 
+def load_spx_list(min_date: tp.Union[str, datetime.date, None] = None,
+        max_date: tp.Union[str, datetime.date, None] = None,
+        tail: tp.Union[datetime.timedelta, float, int] = 4 * 365):
+    return load_list(min_date, max_date, tail, stocks_type='SPX500')
+
+
 def load_data(
         assets: tp.List[tp.Union[dict,str]] = None,
         min_date: tp.Union[str, datetime.date, None] = None,
@@ -77,7 +83,8 @@ def load_data(
         data = adjust_by_splits(data, False)
     data = data.transpose(*dims)
     data = data.sortby(ds.TIME, ascending=forward_order)
-    data.name = "stocks_nasdaq100" if stocks_type.lower() in ["nasdaq100", "ndx100"] else "stocks"
+    data.name = "stocks_nasdaq100" if stocks_type.lower() in ["nasdaq100", "ndx100"] else "stocks_s&p500"\
+        if stocks_type.lower() == "spx500" else "stocks"
     return data
 
 
@@ -89,6 +96,16 @@ def load_ndx_data(assets: tp.List[tp.Union[dict,str]] = None,
         tail: tp.Union[datetime.timedelta, float, int] = DEFAULT_TAIL,
 ) -> xr.DataArray:
     return load_data(assets, min_date, max_date, dims, forward_order, tail, stocks_type='NDX100')
+
+
+def load_spx_data(assets: tp.List[tp.Union[dict,str]] = None,
+        min_date: tp.Union[str, datetime.date, None] = None,
+        max_date: tp.Union[str, datetime.date, None] = None,
+        dims: tp.Tuple[str, str, str] = (ds.FIELD, ds.TIME, ds.ASSET),
+        forward_order: bool = True,
+        tail: tp.Union[datetime.timedelta, float, int] = DEFAULT_TAIL,
+) -> xr.DataArray:
+    return load_data(assets, min_date, max_date, dims, forward_order, tail, stocks_type='SPX500')
 
 
 def adjust_by_splits(data, make_copy=True):
@@ -189,7 +206,7 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
             + str(round(time.time() - start_time)) + "s"
         )
 
-    fields = [f.OPEN, f.LOW, f.HIGH, f.CLOSE, f.VOL, f.DIVS, f.SPLIT_CUMPROD, f.IS_LIQUID] if stocks_type.lower() == 'ndx100' \
+    fields = [f.OPEN, f.LOW, f.HIGH, f.CLOSE, f.VOL, f.DIVS, f.SPLIT_CUMPROD, f.IS_LIQUID] if stocks_type.lower() in ['ndx100', 'spx500'] \
         else [f.OPEN, f.LOW, f.HIGH, f.CLOSE, f.VOL, f.DIVS, f.SPLIT, f.SPLIT_CUMPROD, f.IS_LIQUID]
     if len(chunks) == 0:
         whole = xr.DataArray(

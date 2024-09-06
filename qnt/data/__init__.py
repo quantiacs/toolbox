@@ -5,6 +5,8 @@ from .stocks import load_ndx_data as stocks_load_ndx_data
 from .stocks import load_origin_data as stocks_load_origin_data
 from .stocks import restore_origin_data as stocks_restore_origin_data
 from .stocks import adjust_by_splits as stocks_adjust_by_splits
+from .stocks import load_spx_list as stocks_load_spx_list
+from .stocks import load_spx_data as stocks_load_spx_data
 
 from .blsgov import load_db_list as blsgov_load_db_list
 from .blsgov import load_db_meta as blsgov_load_db_meta
@@ -49,7 +51,9 @@ from ..output import check as check_output
 def load_data_by_type(data_type, **kwargs):
     if data_type == 'stocks' or data_type == 'stocks_long':
         return stocks_load_data(**kwargs)
-    if data_type == 'stocks_nasdaq100':
+    elif data_type == 'stocks_s&p500':
+        return stocks_load_spx_data(**kwargs)
+    elif data_type == 'stocks_nasdaq100':
         return stocks_load_ndx_data(**kwargs)
     elif data_type == 'futures':
         return futures_load_data(**kwargs)

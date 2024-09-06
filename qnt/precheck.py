@@ -87,11 +87,11 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
         i += 1
         log_info("pass:", i, "/", len(dates), "max_date:", date.isoformat())
 
-        if data_type == 'stocks' or data_type == 'stocks_long' or data_type == 'stocks_nasdaq100':
+        if data_type in ['stocks', 'stocks_long', 'stocks_nasdaq100', 'stocks_s&p500']:
             timeout = 30 * 60
-        if data_type == 'futures':
+        elif data_type == 'futures':
             timeout = 10 * 60
-        if data_type == 'crypto' or data_type == 'crypto_futures' or data_type == 'cryptofutures':
+        elif data_type in ['crypto', 'crypto_futures', 'cryptofutures']:
             timeout = 5 * 60
 
         data_url = urllib.parse.urljoin(urllib.parse.urljoin(qnt.data.common.BASE_URL, 'last/'), date.isoformat()) + "/"
@@ -124,14 +124,14 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
             log_info("Check the output...")
             output = load_output(fractions_fn, date)
 
-            if data_type == 'stocks' or data_type == 'stocks_long':
+            if data_type in ['stocks', 'stocks_long']:
                 qnt.stats.check_exposure(output)
 
             log_info("Load data...")
             data = qnt.data.load_data_by_type(data_type, assets=output.asset.values.tolist(),
                                               min_date=str(output.time.min().values)[:10], max_date=date)
 
-            if data_type == 'stocks' or data_type == 'stocks_long' or data_type == 'stocks_nasdaq100':
+            if data_type in ['stocks', 'stocks_long', 'stocks_nasdaq100', 'stocks_s&p500']:
                 non_liquid = qnt.stats.calc_non_liquid(data, output)
                 if len(non_liquid.time) > 0:
                     log_err("ERROR! The output contains illiquid positions.")
@@ -210,9 +210,8 @@ def load_output(fn, date):
 
 
 def check_output(output, data_type='stocks'):
-    if data_type != 'stocks' and data_type != 'stocks_long' and data_type != 'futures' \
-            and data_type != 'crypto' and data_type != 'crypto_futures' and data_type != 'cryptofutures' \
-            and data_type != 'stocks_nasdaq100':
+    if data_type not in ['stocks', 'stocks_long', 'futures', 'crypto', 'crypto_futures', 'cryptofutures',
+                         'stocks_nasdaq100', 'stocks_s&p500']:
         log_err("Unsupported data_type", data_type)
         return
 

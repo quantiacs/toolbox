@@ -287,6 +287,7 @@ def backtest(
         data = load_data(data_days_difference)
         try:
             if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long' \
+                    or data.name == 'stocks_s&p500' and competition_type != 'stocks_s&p500' \
                     or data.name == 'stocks_nasdaq100' and competition_type != 'stocks_nasdaq100' \
                     or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures' \
                     or data.name == 'crypto' and competition_type != 'crypto' \
@@ -311,6 +312,7 @@ def backtest(
         data = load_data(lookback_period)
         try:
             if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long' \
+                    or data.name == 'stocks_s&p500' and competition_type != 'stocks_s&p500' \
                     or data.name == 'stocks_nasdaq100' and competition_type != 'stocks_nasdaq100' \
                     or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures' \
                     or data.name == 'crypto' and competition_type != 'crypto' \

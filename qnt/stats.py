@@ -1,4 +1,4 @@
-from .data import f, ds, stocks_load_list, get_env, futures_load_list, stocks_load_ndx_list
+from .data import f, ds, stocks_load_list, get_env, futures_load_list, stocks_load_ndx_list, stocks_load_spx_list
 from .data.common import track_event
 from .output import normalize as output_normalize
 from qnt.log import log_info, log_err
@@ -582,7 +582,7 @@ def calc_avg_points_per_year(data: xr.DataArray):
         if data.name in ['cryptofutures', 'crypto_futures', 'crypto_daily', 'cryptodaily',
                          'crypto_daily_long', 'crypto_daily_long_short']:
             return 365
-        if data.name in ['stocks', 'stocks_long', 'futures', 'stocks_nasdaq100']:
+        if data.name in ['stocks', 'stocks_long', 'futures', 'stocks_nasdaq100', 'stocks_s&p500']:
             return 251
     t = np.sort(data.coords[ds.TIME].values)
     tp = np.roll(t, 1)
@@ -599,6 +599,8 @@ def get_default_is_period(data):
 
 
 def get_default_is_period_for_type(name):
+    if name == 'stocks_s&p500':
+        return int(get_env('IS_STOCKS_S&P500', '4536', True))
     if name == 'stocks_nasdaq100':
         return int(get_env('IS_STOCKS_NASDAQ100', '3528', True))
     if name == 'stocks' or name == 'stocks_long':
@@ -615,6 +617,8 @@ def get_default_is_period_for_type(name):
 
 
 def get_default_is_start_date_for_type(name):
+    if name == 'stocks_s&p500':
+        return get_env('SD_STOCKS_S&P500', '2006-01-01', True)
     if name == 'stocks_nasdaq100':
         return get_env('SD_STOCKS_NASDAQ100', '2006-01-01', True)
     if name == 'stocks' or name == 'stocks_long':
@@ -631,6 +635,8 @@ def get_default_is_start_date_for_type(name):
 
 
 def get_default_slippage(data):
+    if data.name == 'stocks_s&p500':
+        return float(get_env('SL_STOCKS_S&P500', '0.05', True))
     if data.name == 'stocks_nasdaq100':
         return float(get_env('SL_STOCKS_NASDAQ100', '0.05', True))
     if data.name == 'stocks':
@@ -785,6 +791,8 @@ def calc_sector_distribution(portfolio_history, timeseries=None, kind=None):
 
     if kind == 'stocks_nasdaq100':
         assets = stocks_load_ndx_list(min_date=min_date, max_date=max_date)
+    elif kind == 'stocks_s&p500':
+        assets = stocks_load_spx_list(min_date=min_date, max_date=max_date)
     elif kind == 'stocks' or kind == 'stocks_long':
         assets = stocks_load_list(min_date=min_date, max_date=max_date)
     elif kind == 'futures':

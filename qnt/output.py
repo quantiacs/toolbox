@@ -74,13 +74,12 @@ def clean(output, data, kind=None, debug=True):
             log_info("ffill if the current price is None...")
             output = output.fillna(0)
             output = output.where(np.isfinite(data.sel(field='close')))
-            if kind != "stocks_nasdaq100":
+            if kind not in ["stocks_nasdaq100", "stocks_s&p500"]:
                 output = output.ffill('time')
             output = output.fillna(0)
 
-        if kind == "stocks" or kind == "stocks_long"  or kind == "stocks_nasdaq100"\
-                or kind == 'crypto_daily' or kind == 'cryptodaily'\
-                or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
+        if kind in ["stocks", "stocks_long", "stocks_nasdaq100", "stocks_s&p500", "crypto_daily", "cryptodaily",
+                    "crypto_daily_long", "crypto_daily_long_short"]:
             log_info("Check liquidity...")
             non_liquid = qns.calc_non_liquid(data, output)
             if len(non_liquid.coords[ds.TIME]) > 0:
@@ -104,16 +103,15 @@ def clean(output, data, kind=None, debug=True):
                     add = xr.full_like(add, np.nan)
                     output = xr.concat([output, add], dim='time')
                     output = output.fillna(0)
-                    if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100"\
-                            or kind == 'crypto_daily' or kind == 'cryptodaily' \
-                            or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
+                    if kind in ["stocks", "stocks_long", "stocks_nasdaq100", "stocks_s&p500", "crypto_daily",
+                                "cryptodaily", "crypto_daily_long", "crypto_daily_long_short"]:
                         output = output.where(data.sel(field='is_liquid') > 0)
                     output = output.dropna('asset', how='all').dropna('time', how='all').fillna(0)
                     output = normalize(output)
                 else:
                     log_info("Ok.")
 
-        if kind == 'stocks_long' or kind == 'crypto_daily_long':
+        if kind in ['stocks_long', 'crypto_daily_long']:
             log_info("Check positive positions...")
             neg = output.where(output < 0).dropna(ds.TIME, how='all')
             if len(neg.time) > 0:
@@ -122,7 +120,7 @@ def clean(output, data, kind=None, debug=True):
             else:
                 log_info("Ok.")
 
-        if kind == "stocks" or kind == "stocks_long":
+        if kind in ["stocks", "stocks_long"]:
             log_info("Check exposure...")
             if not qns.check_exposure(output):
                 log_info("Cut big positions...")
@@ -164,9 +162,8 @@ def check(output, data, kind=None, check_correlation=True):
         output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))
 
     try:
-        if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100"\
-                or kind == 'crypto_daily' or kind == 'cryptodaily' \
-                or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
+        if kind in ["stocks", "stocks_long", "stocks_nasdaq100", "stocks_s&p500", "crypto_daily", "cryptodaily",
+                    "crypto_daily_long", "crypto_daily_long_short"]:
             log_info("Check liquidity...")
             non_liquid = qns.calc_non_liquid(data, output)
             if len(non_liquid.coords[ds.TIME]) > 0:
@@ -188,7 +185,7 @@ def check(output, data, kind=None, check_correlation=True):
                     log_info("Ok.")
             track_event("OUTPUT_CHECK")
 
-        if kind == "stocks" or kind == "stocks_long":
+        if kind in ["stocks", "stocks_long"]:
             log_info("Check exposure...")
             if not qns.check_exposure(output):
                 log_err("Use more assets or/and use qnt.output.clean")
@@ -223,7 +220,7 @@ def check(output, data, kind=None, check_correlation=True):
                 #     else:
                 #         log_info("Ok.")
 
-                if kind == 'stocks_long' or kind == 'crypto_daily_long':
+                if kind in ['stocks_long', 'crypto_daily_long']:
                     log_info("Check positive positions...")
                     neg = output.where(output < 0).dropna(ds.TIME, how='all')
                     if len(neg.time) > 0:
