@@ -17,8 +17,7 @@ import qnt.stats as qnstat
 from qnt.graph import is_notebook, make_major_plots, is_interact
 from qnt.log import log_info, log_err
 
-
-DataSet = tp.Union[xr.DataArray,dict]
+DataSet = tp.Union[xr.DataArray, dict]
 
 
 def backtest_ml(
@@ -28,45 +27,102 @@ def backtest_ml(
             tp.Callable[[tp.Any, DataSet], xr.DataArray],
             tp.Callable[[tp.Any, DataSet, tp.Any], tp.Tuple[xr.DataArray, tp.Any]],
         ],
-
-        train_period: int = 4*365,
+        train_period: int = 4 * 365,
         retrain_interval: int = 365,
         predict_each_day: bool = False,
         retrain_interval_after_submit: tp.Union[int, None] = None,
-
         competition_type: str,
-        load_data: tp.Union[tp.Callable[[int], tp.Union[DataSet,tp.Tuple[DataSet,np.ndarray]]],None] = None,
+        load_data: tp.Union[tp.Callable[[int], tp.Union[DataSet, tp.Tuple[DataSet, np.ndarray]]], None] = None,
         lookback_period: int = 365,
-        test_period: int = 365*15,
+        test_period: int = 365 * 15,
         start_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
         end_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
-        window: tp.Union[tp.Callable[[DataSet,np.datetime64,int], DataSet], None] = None,
+        window: tp.Union[tp.Callable[[DataSet, np.datetime64, int], DataSet], None] = None,
         analyze: bool = True,
         build_plots: bool = True,
         collect_all_states: bool = False,
         check_correlation: bool = False,
-    ):
+):
+    """
+    Runs a backtest of a machine learning trading strategy over historical data.
+
+    The `backtest_ml` function trains a machine learning model using historical data and evaluates its performance over a specified test period.
+    It supports retraining the model at specified intervals and can handle stateful prediction functions.
+
+    Parameters:
+        train (Callable[[DataSet], Any]): A function that creates and trains the machine learning model.
+            It accepts a `DataSet` and returns a trained model object.
+
+        predict (Callable): A function that uses the trained model to make predictions.
+            It should accept either:
+                - model (Any), data (DataSet), and return an output (`xr.DataArray`)
+                - or model (Any), data (DataSet), state (Any), and return a tuple of (output (`xr.DataArray`), state)
+            The function generates trading signals or weights based on the model and the provided data.
+
+        train_period (int, optional): The number of calendar days of data to use for training the model.
+            Default is 4 * 365 (approximately 4 years).
+
+        retrain_interval (int, optional): The interval in calendar days at which the model is retrained.
+            Default is 365 (approximately 1 year).
+
+        predict_each_day (bool, optional): If True, the `predict` function is called for each day individually.
+            If False, predictions are made in batches over the retrain interval.
+            Default is False.
+
+        retrain_interval_after_submit (int or None, optional): The retrain interval to use after submission.
+            If None, `retrain_interval` is used. Useful for adjusting retrain frequency in production.
+            Default is None.
+
+        competition_type (str): Specifies the type of competition or dataset to use.
+            Possible values include "stocks_s&p500", "stocks_nasdaq100", "futures", "stocks",
+            "cryptofutures", "stocks_long", "crypto", "crypto_daily".
+
+        load_data (Callable[[int], Union[DataSet, Tuple[DataSet, np.ndarray]]], optional): Function to load the data required for backtesting.
+            It should accept an integer (`tail`), representing the number of periods to load, and return a `DataSet`
+            (and optionally a tuple of `DataSet` and time series).
+            If None, a default data loading function based on `competition_type` is used.
+            Default is None.
+
+        lookback_period (int, optional): The minimum number of calendar days of data required for each prediction.
+            Default is 365 (approximately 1 year).
+
+        test_period (int, optional): The total number of calendar days over which to perform the backtest.
+            Default is 15 * 365 (approximately 15 years).
+
+        start_date (datetime-like, optional): The start date for the backtest.
+            If None, calculated as `end_date` minus `test_period`.
+            Default is None.
+
+        end_date (datetime-like, optional): The end date for the backtest.
+            If None, defaults to today's date.
+            Default is None.
+
+        window (Callable[[DataSet, np.datetime64, int], DataSet], optional): A function that isolates a subset of data for each prediction or training iteration.
+            It should accept data (`DataSet`), current datetime (`np.datetime64`), and tail (int), and return a `DataSet` for the current iteration.
+            If None, a default windowing function is used.
+            Default is None.
+
+        analyze (bool, optional): If True, analyze the backtest results and calculate statistics.
+            Default is True.
+
+        build_plots (bool, optional): If True and `analyze` is True, generate plots of the backtest results.
+            Default is True.
+
+        collect_all_states (bool, optional): If True, collect and return the state from each iteration.
+            If False, only the final state is returned.
+            Default is False.
+
+        check_correlation (bool, optional): If True, perform a correlation check during analysis.
+            Default is False.
+
+    Returns:
+        result (xr.DataArray): The backtest output data.
+
+        state (Any): The final state of the prediction function (if applicable).
+            If `collect_all_states` is True, a list of states from all iterations is returned.
+
     """
 
-    :param train: creates and trains model for prediction
-    :param predict: predicts price movements and generates outputs
-    :param train_period: the data length in trading days for training
-    :param retrain_interval: how often to retrain the model(in calendar days)
-    :param predict_each_day: perform predict for every day. Set True if you suspect the looking forward
-    :param retrain_interval_after_submit:
-    :param competition_type: "futures" | "stocks" | "cryptofutures" | "stocks_long" | "crypto" | "crypto_daily"
-    :param load_data: data load function, accepts tail arg, returns time series and data
-    :param lookback_period: the minimal calendar days period for one prediction
-    :param test_period:  test period (calendar days)
-    :param start_date: start date for backtesting, overrides test period
-    :param end_date: end date for backtesting, by default - now
-    :param window: function which isolates data for one prediction or training
-    :param analyze: analyze the output and calc stats
-    :param build_plots: build plots (require analyze=True)
-    :param collect_all_states: collect all states instead of the last one
-    :param check_correlation: correlation check
-    :return:
-    """
     qndc.track_event("ML_BACKTEST")
 
     if load_data is None:
@@ -74,6 +130,7 @@ def backtest_ml(
 
     if window is None:
         window = standard_window
+
     def copy_window(data, dt, tail):
         return copy.deepcopy(window(data, dt, tail))
 
@@ -132,13 +189,13 @@ def backtest_ml(
 
         last_date = np.datetime64(qndc.parse_date(datetime.date.today()))
         if start_date is None:
-            start_date = last_date - np.timedelta64(test_period-1, 'D')
+            start_date = last_date - np.timedelta64(test_period - 1, 'D')
         else:
             start_date = pd.Timestamp(start_date).to_datetime64()
             test_period = (last_date - start_date) // np.timedelta64(1, 'D')
 
         # ---
-        log_info("Run First Iteration...") # to catch most errors
+        log_info("Run First Iteration...")  # to catch most errors
         qndc.set_max_datetime(start_date)
         data = load_data(max(train_period, lookback_period))
         data, data_ts = extract_time_series(data)
@@ -163,7 +220,7 @@ def backtest_ml(
         test_ts = extract_time_series(test_data)[1]
 
         log_info('Backtest...')
-        outputs = []
+        outputs = None
         t = test_ts[0]
         state = None
         model = None
@@ -175,9 +232,7 @@ def backtest_ml(
                 end_t = test_ts[test_ts <= end_t][-1]
 
                 train_data_slice = copy_window(train_data, t, train_period)
-                # print("train model t <=", str(t)[:10])
                 model = train(train_data_slice)
-                # print("predict", str(t)[:10], "<= t <=", str(end_t)[:10])
                 if predict_each_day:
                     for test_t in test_ts[np.logical_and(test_ts >= t, test_ts <= end_t)]:
                         test_data_slice = copy_window(train_data, test_t, lookback_period)
@@ -187,7 +242,11 @@ def backtest_ml(
                             states.append(state)
                         if test_t in output.time:
                             output = output.sel(time=[test_t])
-                            outputs.append(output)
+                            if outputs is None:
+                                coords = output.coords.copy()
+                                coords['time'] = test_ts
+                                outputs = xr.DataArray(np.nan, dims=output.dims, coords=coords)
+                            outputs.loc[dict(time=[test_t])] = output
                             p.update(np.where(test_ts == test_t)[0].item())
                 else:
                     test_data_slice = copy_window(train_data, end_t, lookback_period + retrain_interval)
@@ -196,7 +255,11 @@ def backtest_ml(
                     if collect_all_states:
                         states.append(state)
                     output = output.where(output.time >= t).where(output.time <= end_t).dropna('time', how='all')
-                    outputs.append(output)
+                    if outputs is None:
+                        coords = output.coords.copy()
+                        coords['time'] = test_ts
+                        outputs = xr.DataArray(np.nan, dims=output.dims, coords=coords)
+                    outputs.loc[dict(time=output.time)] = output
 
                 p.update(np.where(test_ts == end_t)[0].item())
 
@@ -206,7 +269,7 @@ def backtest_ml(
                 else:
                     go = False
 
-            result = xr.concat(outputs, dim='time')
+            result = outputs
             min_date = test_ts[0] - np.timedelta64(60, 'D')
             data = qndata.load_data_by_type(competition_type, min_date=str(min_date)[:10])
             result = qnout.clean(result, data, competition_type)
@@ -232,39 +295,97 @@ def backtest_ml(
 def backtest(
         *,
         competition_type: str,
-        strategy:  tp.Union[
+        strategy: tp.Union[
             tp.Callable[[DataSet], xr.DataArray],
             tp.Callable[[DataSet, tp.Any], tp.Tuple[xr.DataArray, tp.Any]],
         ],
-        load_data: tp.Union[tp.Callable[[int], tp.Union[DataSet,tp.Tuple[DataSet,np.ndarray]]],None] = None,
+        load_data: tp.Union[tp.Callable[[int], tp.Union[DataSet, tp.Tuple[DataSet, np.ndarray]]], None] = None,
         lookback_period: int = 365,
-        test_period: int = 365*15,
+        test_period: int = 365 * 15,
         start_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
         end_date: tp.Union[np.datetime64, str, datetime.datetime, datetime.date, None] = None,
-        window: tp.Union[tp.Callable[[DataSet,np.datetime64,int], DataSet], None] = None,
+        window: tp.Union[tp.Callable[[DataSet, np.datetime64, int], DataSet], None] = None,
         step: int = 1,
         analyze: bool = True,
         build_plots: bool = True,
         collect_all_states: bool = False,
         check_correlation: bool = False,
-    ):
+):
+    """
+    Runs a backtest of a given trading strategy over specified data and time period.
+
+    The backtest function executes a trading strategy over historical data, simulating trades and collecting results.
+    It can handle strategies that use state across iterations and can perform analysis and plotting of the results.
+
+    Parameters:
+        competition_type (str): Specifies the type of competition or dataset to use.
+            Possible values are "stocks_s&p500", "stocks_nasdaq100", "futures", "stocks",
+            "cryptofutures", "stocks_long", "crypto".
+
+        strategy (Callable): A function implementing the trading strategy. It should accept either:
+            - data (DataSet) and return an output (xr.DataArray)
+            - or data (DataSet) and state, and return a tuple of (output (xr.DataArray), state)
+            The strategy is executed at each time step with the current data (and state if applicable),
+            and should return the trading signals or weights.
+
+        load_data (Callable, optional): Function to load the data required for backtesting.
+            It should accept an integer (tail), representing the number of periods to load,
+            and return a DataSet (and optionally a tuple of DataSet and time series).
+            If None, a default data loading function based on competition_type is used.
+
+        lookback_period (int, optional): The number of calendar days to include in each iteration (window) of the backtest.
+            Default is 365.
+
+        test_period (int, optional): The total number of calendar days over which to perform the backtest.
+            Default is 15 years (365 * 15 days).
+
+        start_date (datetime-like, optional): The start date of the backtest.
+            If None, the start date is calculated as end_date minus test_period.
+
+        end_date (datetime-like, optional): The end date of the backtest.
+            If None, the end date is set to today's date.
+
+        window (Callable, optional): A function that isolates a subset of data for each iteration.
+            It should accept data (DataSet), current datetime (np.datetime64), and tail (int),
+            and return a DataSet for the current iteration.
+            If None, a default windowing function is used.
+
+        step (int, optional): The step size in days between each iteration.
+            Default is 1 (daily iterations).
+
+        analyze (bool, optional): If True, analyze the backtest results and calculate statistics.
+            Default is True.
+
+        build_plots (bool, optional): If True and analyze is True, generate plots of the backtest results.
+            Default is True.
+
+        collect_all_states (bool, optional): If True, collect and return the state from each iteration.
+            If False, only the final state is returned.
+            Default is False.
+
+        check_correlation (bool, optional): If True, perform a correlation check during analysis.
+            Default is False.
+
+    Returns:
+        result (xr.DataArray): The backtest output data.
+        state (Any): The final state of the strategy (if applicable).
+            If collect_all_states is True, a list of states from all iterations is returned.
+
     """
 
-    :param competition_type: "futures" | "stocks" | "cryptofutures" | "stocks_long" | "crypto"
-    :param load_data: data load function, accepts tail arg, returns time series and data
-    :param lookback_period: calendar days period for one iteration
-    :param strategy: accepts data, returns weights distribution for the last day
-    :param test_period: test period (calendar days)
-    :param start_date: start date for backtesting, overrides test period
-    :param end_date: end date for backtesting, by default - now
-    :param step: step size
-    :param window: function which isolates data for one iteration
-    :param analyze: analyze the output and calc stats
-    :param build_plots: build plots (require analyze=True)
-    :param collect_all_states: collect all states instead of the last one
-    :param check_correlation: correlation check
-    :return:
-    """
+    def validate_data(data):
+        mismatches = {
+            'stocks': ['stocks', 'stocks_long'],
+            'stocks_s&p500': ['stocks_s&p500'],
+            'stocks_nasdaq100': ['stocks_nasdaq100'],
+            'cryptofutures': ['cryptofutures', 'crypto_futures'],
+            'crypto': ['crypto'],
+            'futures': ['futures']
+        }
+        if data.name not in mismatches.get(competition_type, []):
+            log_err(
+                f"WARNING! The data type and the competition type are mismatched. Data type: {data.name}, competition type: {competition_type}")
+
     qndc.track_event("BACKTEST")
 
     if window is None:
@@ -285,16 +406,7 @@ def backtest(
         current_date = pd.to_datetime('today')
         data_days_difference = (current_date - checking_start_data_date).days
         data = load_data(data_days_difference)
-        try:
-            if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long' \
-                    or data.name == 'stocks_s&p500' and competition_type != 'stocks_s&p500' \
-                    or data.name == 'stocks_nasdaq100' and competition_type != 'stocks_nasdaq100' \
-                    or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures' \
-                    or data.name == 'crypto' and competition_type != 'crypto' \
-                    or data.name == 'futures' and competition_type != 'futures':
-                log_err("WARNING! The data type and the competition type are mismatch.")
-        except:
-            pass
+        validate_data(data)
         data, time_series = extract_time_series(data)
 
         log_info("Run strategy...")
@@ -310,16 +422,7 @@ def backtest(
             days=60)))
     else:
         data = load_data(lookback_period)
-        try:
-            if data.name == 'stocks' and competition_type != 'stocks' and competition_type != 'stocks_long' \
-                    or data.name == 'stocks_s&p500' and competition_type != 'stocks_s&p500' \
-                    or data.name == 'stocks_nasdaq100' and competition_type != 'stocks_nasdaq100' \
-                    or data.name == 'cryptofutures' and competition_type != 'cryptofutures' and competition_type != 'crypto_futures' \
-                    or data.name == 'crypto' and competition_type != 'crypto' \
-                    or data.name == 'futures' and competition_type != 'futures':
-                log_err("WARNING! The data type and the competition type are mismatch.")
-        except:
-            pass
+        validate_data(data)
         data, time_series = extract_time_series(data)
 
         log_info("Run strategy...")
@@ -350,7 +453,7 @@ def backtest(
         qndc.set_max_datetime(end_date)
         last_date = np.datetime64(qndc.parse_date(datetime.date.today()))
         if start_date is None:
-            start_date = last_date - np.timedelta64(test_period-1, 'D')
+            start_date = last_date - np.timedelta64(test_period - 1, 'D')
         else:
             start_date = pd.Timestamp(start_date).to_datetime64()
             test_period = (last_date - start_date) // np.timedelta64(1, 'D')
@@ -380,7 +483,8 @@ def backtest(
         # ---
 
         log_info("---")
-        result, state = run_iterations(time_series, data, window, start_date, lookback_period, strategy_wrap, step, collect_all_states)
+        result, state = run_iterations(time_series, data, window, start_date, lookback_period, strategy_wrap, step,
+                                       collect_all_states)
         if result is None:
             return
 
@@ -414,47 +518,57 @@ def run_iterations(time_series, data, window, start_date, lookback_period, strat
     log_info("Run iterations...\n")
 
     ts = np.sort(time_series)
-    outputs = []
     all_states = []
 
     output_time_coord = ts[ts >= start_date]
     output_time_coord = output_time_coord[::step]
 
-    i = 0
-
     sys.stdout.flush()
 
-    with progressbar.ProgressBar(max_value=len(output_time_coord), poll_interval=1) as p:
-        state = None
-        for t in output_time_coord:
+    state = None
+    num_times = len(output_time_coord)
+    output_data = None
+
+    with progressbar.ProgressBar(max_value=num_times, poll_interval=1) as p:
+        for i, t in enumerate(output_time_coord):
             tail = copy_window(data, t, lookback_period)
             result = strategy(tail, copy.deepcopy(state))
             output, state = unpack_result(result)
-            if type(output) != xr.DataArray:
-                log_err("Output is not xarray!")
+
+            if not isinstance(output, xr.DataArray):
+                log_err("Output is not an xarray DataArray!")
                 return
-            if set(output.dims) != {'asset'} and set(output.dims) != {'asset', 'time'}:
-                log_err("Wrong output dimensions. ", output.dims, "Should contain only:", {'asset', 'time'})
+            if set(output.dims) not in [{'asset'}, {'asset', 'time'}]:
+                log_err("Wrong output dimensions. ", output.dims, " Should contain only:", {'asset', 'time'})
                 return
             if 'time' in output.dims:
                 output = output.sel(time=t)
             output = output.drop_vars(['field', 'time'], errors='ignore')
-            outputs.append(output)
+
+            if output_data is None:
+                asset_coord = output['asset']
+                output_shape = (num_times, len(asset_coord))
+                output_coords = {'time': output_time_coord, 'asset': asset_coord}
+                output_data = xr.DataArray(
+                    np.empty(output_shape, dtype=output.dtype),
+                    coords=output_coords,
+                    dims=('time', 'asset')
+                )
+            output_data[i] = output.values
+
             if collect_all_states:
                 all_states.append(state)
-            i += 1
-            p.update(i)
+
+            p.update(i + 1)
 
     sys.stderr.flush()
+    log_info("Iterations complete.")
 
-    log_info("Merge outputs...")
-    output = xr.concat(outputs, pd.Index(output_time_coord, name=qndata.ds.TIME))
-
-    return output, all_states if collect_all_states else state
+    return output_data, all_states if collect_all_states else state
 
 
-def standard_window(data, max_date: np.datetime64, lookback_period:int):
-    min_date = max_date - np.timedelta64(lookback_period,'D')
+def standard_window(data, max_date: np.datetime64, lookback_period: int):
+    min_date = max_date - np.timedelta64(lookback_period, 'D')
     return data.loc[dict(time=slice(min_date, max_date))]
 
 
@@ -611,18 +725,19 @@ def build_plots_dash(output, stat_global, stat_per_asset):
 
         @app.callback(
             [Output('output_table', 'columns'), Output("output_table", "data")],
-            [Input('assets_dropdown', 'value'),Input("output_row_slider", "value"), Input("output_column_slider", "value")]
+            [Input('assets_dropdown', 'value'), Input("output_row_slider", "value"),
+             Input("output_column_slider", "value")]
         )
-        def update_output_table(asset,row_offset, column_offset):
+        def update_output_table(asset, row_offset, column_offset):
             out = output
-            out = out[row_offset:row_offset+10,:]
+            out = out[row_offset:row_offset + 10, :]
             if asset in out.asset.values.tolist():
-                out = out.loc[:,[asset]]
+                out = out.loc[:, [asset]]
             else:
-                out = out[:,column_offset:column_offset+10]
+                out = out[:, column_offset:column_offset + 10]
 
             cols = [{"name": "time", "id": "time"}] + [
-                {"name": i, "id": i} for i in sorted(out.asset[column_offset:column_offset+10].values.tolist())
+                {"name": i, "id": i} for i in sorted(out.asset[column_offset:column_offset + 10].values.tolist())
             ]
             data = out.to_pandas().reset_index().to_dict('records')
             for i in data:
@@ -632,7 +747,7 @@ def build_plots_dash(output, stat_global, stat_per_asset):
 
         @app.callback(
             [Output('stats_table', 'columns'), Output("stats_table", "data")],
-            [Input('assets_dropdown', 'value'),Input("stats_row_slider", "value")]
+            [Input('assets_dropdown', 'value'), Input("stats_row_slider", "value")]
         )
         def update_stats_table(asset, row_offset):
             if asset in stat_per_asset.asset.values.tolist():
@@ -642,7 +757,7 @@ def build_plots_dash(output, stat_global, stat_per_asset):
             cols = [{"name": "time", "id": "time"}] + [
                 {"name": i, "id": i} for i in sorted(stat.field.values.tolist())
             ]
-            data = stat[row_offset:row_offset+10].to_pandas().reset_index().to_dict('records')
+            data = stat[row_offset:row_offset + 10].to_pandas().reset_index().to_dict('records')
             for i in data:
                 for k in i.keys():
                     i[k] = "%.6f" % i[k] if k != 'time' else i[k].isoformat()[:13]
@@ -650,10 +765,10 @@ def build_plots_dash(output, stat_global, stat_per_asset):
 
         log_info("Run Dash... Open the link below in your browser.")
 
-        #opens browser
+        # opens browser
         import webbrowser, os
         from threading import Timer
-        Timer(1, lambda: webbrowser.open("http://127.0.0.1:"+os.environ.get('PORT', '8050'), new=2)).start()
+        Timer(1, lambda: webbrowser.open("http://127.0.0.1:" + os.environ.get('PORT', '8050'), new=2)).start()
 
         app.run_server(dev_tools_hot_reload=False)
     except:
@@ -667,8 +782,8 @@ def build_plots_jupyter(output, stat_global, stat_per_asset):
 
     def display_scrollable_output_table(output):
         output = output.to_pandas()
-        tail_r=10
-        tail_c=10
+        tail_r = 10
+        tail_c = 10
 
         def show_table(row_offset, column_offset):
             try:
@@ -699,13 +814,15 @@ def build_plots_jupyter(output, stat_global, stat_per_asset):
 
     def display_scrollable_stats_table(stat):
         stat = stat.to_pandas()
-        tail=10
+        tail = 10
+
         def show_table(offset):
             try:
                 from IPython.display import display
-                display(stat[offset:offset+tail])
+                display(stat[offset:offset + tail])
             except:
                 log_info(stat[offset:offset + tail])
+
         if is_interact():
             try:
                 from ipywidgets import interact, interactive, fixed, interact_manual, Layout, IntSlider
@@ -713,14 +830,14 @@ def build_plots_jupyter(output, stat_global, stat_per_asset):
 
                 interact(show_table,
                          offset=IntSlider(
-                             max(0, len(stat)-tail), 0, max(0, len(stat)-tail), 1,
+                             max(0, len(stat) - tail), 0, max(0, len(stat) - tail), 1,
                              layout=Layout(width='90%')
                          )
-                    )
+                         )
             except:
-                show_table(len(stat)-tail)
+                show_table(len(stat) - tail)
         else:
-            show_table(len(stat)-tail)
+            show_table(len(stat) - tail)
 
     def show_asset_stat(asset):
         if asset in stat_per_asset.asset.values.tolist():
@@ -757,17 +874,19 @@ if __name__ == '__main__':
         data = qndata.futures_load_data(tail=period)
         return data
 
+
     def strategy(data):
         close = data.sel(field='close')
         sma200 = qnta.sma(close, 200).isel(time=-1)
         sma20 = qnta.sma(close, 20).isel(time=-1)
         return xr.where(sma200 < sma20, 1, -1)
 
+
     backtest(
         competition_type="futures",
         load_data=load_data,
         lookback_period=365,
-        test_period=2*365,
+        test_period=2 * 365,
         strategy=strategy
     )
 

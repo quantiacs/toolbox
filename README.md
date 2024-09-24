@@ -29,11 +29,13 @@ Quantiacs hosts a variety of quant competitions, catering to different asset cla
   the top 10 cryptocurrencies.
 - [The Crypto Top-10 Long-Short Contest](https://quantiacs.com/leaderboard/17): Involves both long and short positions
   in the top 10 cryptocurrencies.
+- [The NASDAQ-100 Long-Short contest](https://quantiacs.com/leaderboard/21):  A specialized contest focusing on
+  long-short strategies in the NASDAQ-100, emphasizing fundamental analysis.
 
 ### Current Opportunity
 
-- [The Q21 NASDAQ-100 Long-Short Fundamental Contest](https://quantiacs.com/contest): A specialized contest focusing on
-  long-short strategies in the NASDAQ-100, emphasizing fundamental analysis.
+- [The Q22 S&P500 Long-Short contest](https://quantiacs.com/contest): A specialized contest focusing on
+  long-short strategies in the S&P500.
 
 Since 2014, Quantiacs has hosted numerous quantitative trading contests, allocating over 38 million USD to winning
 algorithms in futures markets. Since 2021, the platform has expanded to include contests for predicting futures,
@@ -56,6 +58,12 @@ and ease of managing dependencies.
     - *Optional*: Prevent auto-activation of this environment:
       ```bash
       conda config --set auto_activate_base false
+      ```
+    - *Alternative*: Create a local environment in the project directory:
+      ```bash
+      git clone https://github.com/quantiacs/toolbox.git
+      cd toolbox
+      conda create --prefix ./conda -c conda-forge -c quantiacs-source 'python>=3.10,<3.11' 'ipywidgets=8.1.3' 'nbformat>=4.2.0' ipykernel ta-lib qnt dash
       ```
 
 3. **API Key Configuration**:
