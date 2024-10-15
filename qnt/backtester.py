@@ -137,14 +137,15 @@ def backtest_ml(
     args_count = len(inspect.getfullargspec(predict).args)
     predict_wrap = (lambda m, d, s: predict(m, d)) if args_count < 3 else predict
 
+    retrain_interval_cur = retrain_interval_after_submit if is_submitted() else retrain_interval
+    if retrain_interval_cur is None:
+        retrain_interval_cur = retrain_interval
+
     log_info("Run the last iteration...")
 
     data = load_data(max(train_period, lookback_period))
     data, data_ts = extract_time_series(data)
 
-    retrain_interval_cur = retrain_interval_after_submit if is_submitted() else retrain_interval
-    if retrain_interval_cur is None:
-        retrain_interval_cur = retrain_interval
     created = None
     model = None
     state = None
@@ -177,12 +178,11 @@ def backtest_ml(
     if need_retrain and retrain_interval_cur > 1 or state is not None:
         qnstate.write((created, model, state))
 
-    if is_submitted():
+    if is_submitted() and not is_multi_pass_mode_enabled():
         if state is not None:
             return output, [state] if collect_all_states else state
         else:
             return output
-
     try:
         print("---")
         qndc.set_max_datetime(end_date)
@@ -204,6 +204,7 @@ def backtest_ml(
         model = train(train_data_slice)
 
         test_data_slice = copy_window(data, data_ts[-1], lookback_period)
+        state = None
         output = predict_wrap(model, test_data_slice, state)
         output, state = unpack_result(output)
 
@@ -228,7 +229,7 @@ def backtest_ml(
         with progressbar.ProgressBar(max_value=len(test_ts), poll_interval=1) as p:
             go = True
             while go:
-                end_t = t + np.timedelta64(max(retrain_interval - 1, 0), 'D')
+                end_t = t + np.timedelta64(max(retrain_interval_cur - 1, 0), 'D')
                 end_t = test_ts[test_ts <= end_t][-1]
 
                 train_data_slice = copy_window(train_data, t, train_period)
@@ -249,7 +250,7 @@ def backtest_ml(
                             outputs.loc[dict(time=[test_t])] = output
                             p.update(np.where(test_ts == test_t)[0].item())
                 else:
-                    test_data_slice = copy_window(train_data, end_t, lookback_period + retrain_interval)
+                    test_data_slice = copy_window(train_data, end_t, lookback_period + retrain_interval_cur)
                     output = predict_wrap(model, test_data_slice, state)
                     output, state = unpack_result(output)
                     if collect_all_states:
@@ -400,40 +401,20 @@ def backtest(
     # ---
     log_info("Run last pass...")
     log_info("Load data...")
-    if is_single_pass():
-        checking_start_data_date = pd.to_datetime(
-            qnstat.get_default_is_start_date_for_type(competition_type)) - datetime.timedelta(days=lookback_period)
-        current_date = pd.to_datetime('today')
-        data_days_difference = (current_date - checking_start_data_date).days
-        data = load_data(data_days_difference)
-        validate_data(data)
-        data, time_series = extract_time_series(data)
 
-        log_info("Run strategy...")
-        state = None
-        if is_submitted() and args_count > 1:
-            state = qnstate.read()
-        result = strategy_wrap(data, state)
-        result, state = unpack_result(result)
+    data = load_data(lookback_period)
+    validate_data(data)
+    data, time_series = extract_time_series(data)
 
-        log_info("Load data for cleanup...")
-        data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), min_date=(
-                pd.to_datetime(qnstat.get_default_is_start_date_for_type(competition_type)) - datetime.timedelta(
-            days=60)))
-    else:
-        data = load_data(lookback_period)
-        validate_data(data)
-        data, time_series = extract_time_series(data)
+    log_info("Run strategy...")
+    state = None
+    if is_submitted() and args_count > 1 and not is_multi_pass_mode_enabled():
+        state = qnstate.read()
+    result = strategy_wrap(data, state)
+    result, state = unpack_result(result)
 
-        log_info("Run strategy...")
-        state = None
-        if is_submitted() and args_count > 1 and not should_run_iterations():
-            state = qnstate.read()
-        result = strategy_wrap(data, state)
-        result, state = unpack_result(result)
-
-        log_info("Load data for cleanup...")
-        data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), tail=60)
+    log_info("Load data for cleanup...")
+    data = qndata.load_data_by_type(competition_type, assets=result.asset.values.tolist(), tail=60)
 
     result = qnout.clean(result, data)
     result.name = competition_type
@@ -441,7 +422,7 @@ def backtest(
     qnout.write(result)
     qnstate.write(state)
 
-    if is_submitted() and not should_run_iterations():
+    if is_submitted() and not is_multi_pass_mode_enabled():
         if args_count > 1:
             return result, [state] if collect_all_states else state
         else:
@@ -583,12 +564,8 @@ def is_submitted():
     return os.environ.get("SUBMISSION_ID", "") != ""
 
 
-def is_single_pass():
-    return os.environ.get("IS_SINGLE_PASS", "") != ""
-
-
-def should_run_iterations():
-    return os.environ.get("RUN_ITERATIONS", "") != ""
+def is_multi_pass_mode_enabled():
+    return os.environ.get("MULTI_PASS_MODE_ENABLED", "") != ""
 
 
 def unpack_result(result):

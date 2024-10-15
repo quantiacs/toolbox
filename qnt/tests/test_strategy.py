@@ -1040,6 +1040,44 @@ class TestBaseStatistic(unittest.TestCase):
                        'volatility': 0.5480091762}],
              'schema': schema_global}, json.loads(stat_tail))
 
+    def test_futures_backtest(self):
+        import xarray as xr
+        import qnt.ta as qnta
+        import qnt.backtester as qnbt
+        import qnt.data as qndata
+
+        def get_strategy_weights(data):
+            close = data.sel(field='close')
+            close_one_day_ago = qnta.shift(close, periods=1)
+            _open = data.sel(field='open')
+            open_one_day_ago = qnta.shift(_open, periods=1)
+            weights = xr.where(open_one_day_ago < close_one_day_ago, 1, 0)
+            return weights
+
+        def get_multi_pass(start_date, end_date):
+            def load_data(period):
+                return qndata.futures_load_data(tail=period, assets=['F_ES'])
+
+            weights = qnbt.backtest(
+                competition_type='futures',
+                load_data=load_data,
+                lookback_period=365,
+                start_date=start_date,
+                end_date=end_date,
+                strategy=get_strategy_weights,
+                analyze=False,
+                build_plots=False
+            )
+            return weights
+
+        weights_milti_pass = get_multi_pass('2006-01-01', '2006-02-01')
+        data = qndata.futures_load_data(min_date='2005-01-01', max_date='2007-01-01', assets=['F_ES'])
+        weights_single_pass = get_strategy_weights(data)
+        weights_milti_pass = weights_milti_pass.sel(time=slice('2006-01-01', '2006-02-01'))
+        weights_single_pass = weights_single_pass.sel(time=slice('2006-01-01', '2006-02-01'))
+        dif = (weights_milti_pass - weights_single_pass).sum().values
+        self.assertEqual(dif, 0)
+
 
 if __name__ == '__main__':
     unittest.main()
