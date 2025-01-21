@@ -3,7 +3,7 @@ from typing import List, Union, Callable
 from qnt.data.common import *
 from qnt.data.secgov import load_facts
 from qnt.data.secgov_indicators import InstantIndicatorBuilder, PeriodIndicatorBuilder, IndicatorUtils
-from qnt.data.stocks import load_list, load_ndx_list
+from qnt.data.stocks import load_list, get_stocks_type_by_data_name
 
 
 def load_indicators_for(stocks_market_data: xr.DataArray,
@@ -102,7 +102,8 @@ def get_computed_facts(stocks_market_data: xr.DataArray,
     max_date = stocks_market_data.time.max().values.astype(datetime.date)
     asset_names = stocks_market_data.asset.values
 
-    assets_with_ciks = load_ndx_list(min_date, max_date) if 'NAS:' in asset_names[0] else load_list(min_date, max_date)
+    stocks_type = get_stocks_type_by_data_name(stocks_market_data.name)
+    assets_with_ciks = load_list(min_date, max_date, stocks_type=stocks_type)
     ciks = [asset['cik'] for asset in assets_with_ciks if asset['id'] in asset_names and 'cik' in asset]
     facts_names = list(
         {fact for name in indicator_names if name in indicators_builders for fact in

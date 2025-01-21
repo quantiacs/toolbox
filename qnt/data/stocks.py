@@ -88,7 +88,22 @@ def load_data(
     return data
 
 
-def load_ndx_data(assets: tp.List[tp.Union[dict,str]] = None,
+def get_stocks_type_by_data_name(data_name: str) -> str:
+    """
+    Infer the stocks_type argument for load_list() from an xarray.DataArray.name field.
+    Returns a string like "NASDAQ100", "SPX500", or "" if unmatched.
+    """
+    if not data_name:
+        return ""
+    name_lower = data_name.lower()
+    if "nasdaq100" in name_lower or "ndx100" in name_lower:
+        return "NASDAQ100"
+    elif "s&p500" in name_lower or "spx500" in name_lower:
+        return "SPX500"
+    return ""
+
+
+def load_ndx_data(assets: tp.List[tp.Union[dict, str]] = None,
         min_date: tp.Union[str, datetime.date, None] = None,
         max_date: tp.Union[str, datetime.date, None] = None,
         dims: tp.Tuple[str, str, str] = (ds.FIELD, ds.TIME, ds.ASSET),

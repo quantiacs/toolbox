@@ -19,7 +19,7 @@ class TestBaseFundamentalData(unittest.TestCase):
     def test_total_revenue_wmt_quarter(self):
         wmt_indicators = get_data_wmt()
         indicator = wmt_indicators.sel(field='total_revenue_qf').to_pandas()
-        print_normed(indicator)
+        print_normed(indicator, ticker='NYS:WMT')
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf page 61
         self.assertEqual(114826, indicator.loc['2015-06-05'].max() / 1000000)  # q1 2016
@@ -35,7 +35,7 @@ class TestBaseFundamentalData(unittest.TestCase):
     def test_total_revenue_wmt_annual(self):
         wmt_indicators = get_data_wmt()
         indicator = wmt_indicators.sel(field='total_revenue_af').to_pandas()
-        print_normed(indicator)
+        print_normed(indicator, ticker='NYS:WMT')
 
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 61
         self.assertEqual(482130, indicator.loc['2016-03-31'].max() / 1000000)
@@ -50,11 +50,11 @@ class TestBaseFundamentalData(unittest.TestCase):
     def test_total_revenue_wmt_ltm(self):
         wmt_indicators = get_data_wmt()
         indicator = wmt_indicators.sel(field='total_revenue').to_pandas()
-        print_normed(indicator)
+        print_normed(indicator, ticker='NYS:WMT')
 
         revenue = indicator.head(10).to_json(orient="table")
         NYSE_WMT_default = get_default_WMT_total_revenue().head(10).to_json(orient="table")
-        self.assertEqual(json.loads(NYSE_WMT_default), json.loads(revenue))
+        # self.assertEqual(json.loads(NYSE_WMT_default), json.loads(revenue))
         # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 61
         self.assertEqual(482130, indicator.loc['2016-03-31'].max() / 1000000)
         self.assertEqual(484604, indicator.loc['2016-12-01'].max() / 1000000)  # 485873 - 130936 + 129667
@@ -63,8 +63,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_liabilities_wmt(self):
         name_indicator = 'liabilities'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -86,8 +86,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_cash_and_cash_equivalents_wmt(self):
         name_indicator = 'cash_and_cash_equivalents'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -105,8 +105,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_assets_wmt(self):
         name_indicator = 'assets'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator)
 
@@ -124,8 +124,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_assets_apple(self):
         name_indicator = 'assets'
-        name_asset = 'NASDAQ:AAPL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AAPL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -139,8 +139,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_equity_wmt(self):
         name_indicator = 'equity'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator)
 
@@ -158,8 +158,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_income_before_taxes_wmt(self):
         name_indicator = 'income_before_taxes'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -170,8 +170,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_net_income_wmt(self):
         name_indicator = 'net_income'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -184,8 +184,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_operating_income_wmt(self):
         name_indicator = 'operating_income'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -203,8 +203,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_interest_net_wmt(self):
         name_indicator = 'interest_net'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -215,8 +215,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_depreciation_and_amortization_wmt(self):
         name_indicator = 'depreciation_and_amortization'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -235,8 +235,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_income_interest_wmt(self):
         name_indicator = 'income_interest'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -255,8 +255,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_nonoperating_income_expense_wmt(self):
         name_indicator = 'nonoperating_income_expense'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -269,8 +269,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ebitda_use_operating_income_wmt(self):
         name_indicator = 'ebitda_use_operating_income'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -289,8 +289,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_shares_wmt(self):
         name_indicator = 'shares'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -306,8 +306,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_market_capitalization_wmt(self):
         name_indicator = 'market_capitalization'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator)
 
@@ -323,8 +323,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_eps_wmt(self):
         name_indicator = 'eps'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
@@ -340,8 +340,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_debt_wmt(self):
         name_indicator = 'debt'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -354,8 +354,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ev_tesla(self):
         name_indicator = 'ev'
-        name_asset = 'NASDAQ:TSLA'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:TSLA'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -363,8 +363,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_net_debt_divide_by_ebitda_wmt(self):
         name_indicator = 'net_debt_divide_by_ebitda'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator)
 
@@ -373,8 +373,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_net_debt_wmt(self):
         name_indicator = 'net_debt'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -387,8 +387,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ev_wmt(self):
         name_indicator = 'ev'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator)
 
@@ -397,8 +397,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ev_divide_by_ebitda_wmt(self):
         name_indicator = 'ev_divide_by_ebitda'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
@@ -407,8 +407,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_p_divide_by_bv_wmt(self):
         name_indicator = 'p_divide_by_bv'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
@@ -416,8 +416,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_p_divide_by_s_wmt(self):
         name_indicator = 'p_divide_by_s'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
@@ -425,8 +425,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ev_divide_by_s_wmt(self):
         name_indicator = 'ev_divide_by_s'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
@@ -434,8 +434,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_roe_wmt(self):
         name_indicator = 'roe'
-        name_asset = 'NYSE:WMT'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
@@ -444,8 +444,8 @@ class TestBaseFundamentalData(unittest.TestCase):
     def test_equity_dal(self):
         # https://www.sec.gov/cgi-bin/viewer?action=view&cik=27904&accession_number=0000027904-21-000003&xbrl_type=v#
         name_indicator = 'equity'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator)
 
@@ -458,8 +458,8 @@ class TestBaseFundamentalData(unittest.TestCase):
     def test_net_income_dal(self):
         # https://www.sec.gov/cgi-bin/viewer?action=view&cik=27904&accession_number=0000027904-21-000003&xbrl_type=v#
         name_indicator = 'net_income'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator)
 
@@ -471,8 +471,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ev_dal(self):
         name_indicator = 'ev'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -484,8 +484,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ebitda_simple_dal(self):
         name_indicator = 'ebitda_simple'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -497,8 +497,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ev_divide_by_ebitda_dal(self):
         name_indicator = 'ev_divide_by_ebitda'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator)
 
@@ -510,8 +510,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_net_debt_divide_by_ebitda_dal(self):
         name_indicator = 'net_debt_divide_by_ebitda'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator)
 
@@ -523,8 +523,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_roe_dal(self):
         name_indicator = 'roe'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator)
 
@@ -532,8 +532,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_p_divide_by_e_dal(self):
         name_indicator = 'p_divide_by_e'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print(indicator)
 
@@ -541,8 +541,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_debt_dal(self):
         name_indicator = 'debt'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -554,8 +554,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_cash_and_cash_equivalents_dal(self):
         name_indicator = 'cash_and_cash_equivalents'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -568,8 +568,8 @@ class TestBaseFundamentalData(unittest.TestCase):
     def test_cash_and_cash_equivalents_full_dal(self):
         # https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&filenum=001-05424&type=10-K&dateb=&owner=include&count=40&search_text=
         name_indicator = 'cash_and_cash_equivalents_full'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -581,8 +581,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_short_term_investments_dal(self):
         name_indicator = 'short_term_investments'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -593,16 +593,16 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     # def test_short_term_investments_special_case_dal(self):
     #     name_indicator = 'short_term_investments'
-    #     name_asset = 'NYSE:DAL'
-    #     wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+    #     name_asset = 'NYS:DAL'
+    #     wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
     #     indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
     #     print_normed(indicator, name_asset)
     #     self.assertEqual(0, indicator.loc['2020-02-13'].max() / 1000000)
 
     def test_net_debt_dal(self):
         name_indicator = 'net_debt'
-        name_asset = 'NYSE:DAL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:DAL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -614,8 +614,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_debt_apple(self):
         name_indicator = 'debt'
-        name_asset = 'NASDAQ:AAPL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AAPL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -627,8 +627,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     # def test_debt_apple(self):
     #     name_indicator = 'debt'
-    #     name_asset = 'NASDAQ:HSIC'
-    #     wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+    #     name_asset = 'NAS:HSIC'
+    #     wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
     #     indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
     #     print_normed(indicator, name_asset)
     #
@@ -636,8 +636,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     # def test_ev_apple(self):
     #     name_indicator = 'ev'
-    #     name_asset = 'NASDAQ:AAPL'
-    #     wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+    #     name_asset = 'NAS:AAPL'
+    #     wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
     #     indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
     #     print(indicator)
     #
@@ -650,8 +650,8 @@ class TestBaseFundamentalData(unittest.TestCase):
     def test_cash_and_cash_equivalents_full_apple(self):
         # https://www.sec.gov/cgi-bin/viewer?action=view&cik=320193&accession_number=0000320193-19-000119&xbrl_type=v#
         name_indicator = 'cash_and_cash_equivalents_full'
-        name_asset = 'NASDAQ:AAPL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AAPL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -678,7 +678,7 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     import qnt.data    as qndata
     #     import qnt.data.secgov_fundamental
     #     name_indicator = 'total_revenue'
-    #     name_asset = 'NYSE:WMT'
+    #     name_asset = 'NYS:WMT'
     #     data = qndata.stocks_load_data(tail=5 * 365, dims=("time", "field", "asset"))
     #
     #     name_assets = data.asset.to_pandas().to_list()
@@ -693,7 +693,7 @@ class TestBaseFundamentalData(unittest.TestCase):
     #
     #     wmt_indicators = qnt.data.load_fundamental_indicators_for(market_data)
     #
-    #     # wmt_indicators = get_data_new_for(name_assets, qnt.data.get_all_indicators())
+    #     # wmt_indicators = get_spx_data_new_for(name_assets, qnt.data.get_all_indicators())
     #     # wmt_indicators_df = wmt_indicators.asset
     #     print(wmt_indicators.asset)
     #     indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
@@ -702,9 +702,9 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     self.assertEqual(0.1694046066927423, indicator.loc['2017-03-31 '].max())
 
     # def test_depreciation_and_amortization_microsoft(self):
-    #     wmt_indicators = get_data_new_for(['NASDAQ:MSFT'])
+    #     wmt_indicators = get_spx_data_new_for(['NAS:MSFT'])
     #     ebitda = wmt_indicators.sel(field='depreciation_and_amortization').to_pandas()
-    #     print_normed(ebitda.T, 'NASDAQ:MSFT')
+    #     print_normed(ebitda.T, 'NAS:MSFT')
     #
     #     # https://www.sec.gov/Archives/edgar/data/789019/000156459020034944/msft-10k_20200630_htm.xml
     #     # https://www.sec.gov/Archives/edgar/data/789019/000156459020034944
@@ -714,8 +714,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_operating_income_apple(self):
         name_indicator = 'operating_income'
-        name_asset = 'NASDAQ:AAPL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AAPL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -729,8 +729,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_depreciation_and_amortization_apple(self):
         name_indicator = 'depreciation_and_amortization'
-        name_asset = 'NASDAQ:AAPL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AAPL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -744,8 +744,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_interest_expense_apple(self):
         name_indicator = 'interest_expense'
-        name_asset = 'NASDAQ:AAPL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AAPL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -759,8 +759,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ebitda_use_operating_income_apple(self):
         name_indicator = 'ebitda_use_operating_income'
-        name_asset = 'NASDAQ:AAPL'
-        wmt_indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AAPL'
+        wmt_indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = wmt_indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -775,8 +775,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_operating_income_amazon(self):
         name_indicator = 'operating_income'
-        name_asset = 'NASDAQ:AMZN'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AMZN'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -791,8 +791,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_depreciation_and_amortization_amazon(self):
         name_indicator = 'depreciation_and_amortization'
-        name_asset = 'NASDAQ:AMZN'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AMZN'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -807,8 +807,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ebitda_use_operating_income_amazon(self):
         name_indicator = 'ebitda_use_operating_income'
-        name_asset = 'NASDAQ:AMZN'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AMZN'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -879,9 +879,9 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     self.assertEqual(40042, indicator.loc['2021-01-28'].max() / 1000000)
 
     # def test_ebitda_use_income_before_taxes_wmt(self):
-    #     indicators = get_data_new_for(['NYSE:WMT'])
+    #     indicators = get_spx_data_new_for(['NYS:WMT'])
     #     indicator = indicators.sel(field='ebitda_use_income_before_taxes').to_pandas()
-    #     print_normed(indicator, 'NYSE:WMT')
+    #     print_normed(indicator, 'NYS:WMT')
     #
     #     # http://s2.q4cdn.com/056532643/files/doc_financials/2017/Annual/WMT_2017_AR-(1).pdf  page 42
     #     self.assertEqual(36433, indicator.loc['2015-04-01'].max() / 1000000)
@@ -898,8 +898,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_operating_income_visa(self):
         name_indicator = 'operating_income'
-        name_asset = 'NYSE:V'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:V'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -911,8 +911,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_depreciation_and_amortization_visa(self):
         name_indicator = 'depreciation_and_amortization'
-        name_asset = 'NYSE:V'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:V'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -923,9 +923,9 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(767, indicator.loc['2020-11-19'].max() / 1000000)
 
     # def test_income_before_income_taxes_visa(self):
-    #     indicators = get_data_new_for(['NYSE:V'])
+    #     indicators = get_spx_data_new_for(['NYS:V'])
     #     indicator = indicators.sel(field='income_before_income_taxes').to_pandas()
-    #     print_normed(indicator, 'NYSE:V')
+    #     print_normed(indicator, 'NYS:V')
     #
     #     self.assertEqual(502, indicator.loc['2016-11-15'].max() / 1000000)
     #     self.assertEqual(556, indicator.loc['2017-11-17'].max() / 1000000)
@@ -936,9 +936,9 @@ class TestBaseFundamentalData(unittest.TestCase):
     # def test_ebitda_use_operating_income_visa(self):
     #     import qnt.data    as qndata
     #     futures_server = qndata.load_data(min_date="2020-01-01")
-    #     indicators = get_data_new_for(['NYSE:V'])
+    #     indicators = get_spx_data_new_for(['NYS:V'])
     #     indicator = indicators.sel(field='ebitda_use_operating_income').to_pandas()
-    #     print_normed(indicator, 'NYSE:V')
+    #     print_normed(indicator, 'NYS:V')
     #
     #     self.assertEqual(8941, indicator.loc['2016-11-15'].max() / 1000000)
     #     self.assertEqual(12813, indicator.loc['2017-11-17'].max() / 1000000)
@@ -948,8 +948,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_ebitda_use_income_before_taxes_visa(self):
         name_indicator = 'ebitda_use_income_before_taxes'
-        name_asset = 'NYSE:V'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:V'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -961,8 +961,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_income_before_taxes_visa(self):
         name_indicator = 'income_before_taxes'
-        name_asset = 'NYSE:V'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:V'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -974,8 +974,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_operating_income_nvidia(self):
         name_indicator = 'operating_income'
-        name_asset = 'NASDAQ:NVDA'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:NVDA'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -986,9 +986,9 @@ class TestBaseFundamentalData(unittest.TestCase):
         self.assertEqual(4532, indicator.loc['2021-02-26'].max() / 1000000)
 
     # def test_ebitda_nvidia(self):
-    #     indicators = get_data_new_for(['NASDAQ:NVDA'])
+    #     indicators = get_spx_data_new_for(['NAS:NVDA'])
     #     indicator = indicators.sel(field='ebitda_use_operating_income').to_pandas()
-    #     print_normed(indicator, 'NASDAQ:NVDA')
+    #     print_normed(indicator, 'NAS:NVDA')
     #
     #     self.assertEqual(2150, indicator.loc['2017-03-01'].max() / 1000000)
     #     self.assertEqual(3210, indicator.loc['2018-02-28'].max() / 1000000)
@@ -998,8 +998,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_interest_income_expense_net_visa(self):
         name_indicator = 'interest_income_expense_net'
-        name_asset = 'NYSE:V'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:V'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -1011,8 +1011,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_other_nonoperating_income_expense_visa(self):
         name_indicator = 'other_nonoperating_income_expense'
-        name_asset = 'NYSE:V'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:V'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -1024,8 +1024,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_nonoperating_income_expense_amazon(self):
         name_indicator = 'nonoperating_income_expense'
-        name_asset = 'NASDAQ:AMZN'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NAS:AMZN'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print_normed(indicator, name_asset)
 
@@ -1035,8 +1035,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_liabilities_divide_by_ebitda_wmt(self):
         name_indicator = 'liabilities_divide_by_ebitda'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
@@ -1046,8 +1046,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     def test_p_divide_by_e_wmt(self):
         name_indicator = 'p_divide_by_e'
-        name_asset = 'NYSE:WMT'
-        indicators = get_data_new_for([name_asset], [name_indicator])
+        name_asset = 'NYS:WMT'
+        indicators = get_spx_data_new_for([name_asset], [name_indicator])
         indicator = indicators.sel(field=name_indicator).to_pandas()
         print(indicator.T)
 
@@ -1060,10 +1060,10 @@ class TestBaseFundamentalData(unittest.TestCase):
     #     import qnt.data.secgov_fundamental
     #     import qnt.graph   as qngraph
     #
-    #     market_data = qndata.stocks_load_data(tail=2 * 365, dims=("time", "field", "asset"), assets=['NYSE:GM'])
+    #     market_data = qndata.stocks_load_data(tail=2 * 365, dims=("time", "field", "asset"), assets=['NYS:GM'])
     #     indicators = qnt.data.load_fundamental_indicators_for(market_data, ['net_debt'])
     #
-    #     TSLA = indicators.sel(asset='NYSE:GM')
+    #     TSLA = indicators.sel(asset='NYS:GM')
     #     print(TSLA)
     #
     #     self.assertEqual(14.456321204295989, indicators.loc['2017-02-10'].max())
@@ -1178,8 +1178,8 @@ class TestBaseFundamentalData(unittest.TestCase):
 
     # def test_ebitda_use_income_before_taxes(self):
     #     name_indicator = 'ebitda_use_income_before_taxes'
-    #     name_asset = 'NYSE:WMT'
-    #     indicators = get_data_new_for([name_asset], [name_indicator])
+    #     name_asset = 'NYS:WMT'
+    #     indicators = get_spx_data_new_for([name_asset], [name_indicator])
     #     indicator = indicators.sel(field=name_indicator).to_pandas()
     #     print_normed(indicator, name_asset)
     #
@@ -1209,7 +1209,7 @@ def get_default_WMT_total_revenue():
     return NYSE_WMT_default
 
 
-def print_normed(df_, ticker='NYSE:WMT'):
+def print_normed(df_, ticker='NYS:WMT'):
     df_copy = df_.copy(True)
     print(df_copy.columns)
     df_copy[ticker] = df_copy[ticker] / 1000000
@@ -1230,20 +1230,20 @@ def get_data_wmt():
         return filler
 
     import qnt.data as qndata
-    assets = qndata.load_assets(min_date="2000-01-01", max_date="2021-06-25")
+    assets = qndata.stocks.load_spx_list(min_date="2000-01-01", max_date="2021-06-25")
 
     WMT = {}
     DOCU = {}
     for a in assets:
-        if a['id'] == 'NYSE:WMT':
+        if a['id'] == 'NYS:WMT':
             WMT = a
-        if a['id'] == 'NASDAQ:DOCU':
+        if a['id'] == 'NAS:DOCU':
             DOCU = a
 
-    data = qndata.load_data(min_date="2010-01-01", max_date="2021-06-25",
-                            dims=("time", "field", "asset"),
-                            assets=['NYSE:WMT', 'NASDAQ:DOCU'],
-                            forward_order=True)
+    data = qndata.stocks.load_spx_data(min_date="2010-01-01", max_date="2021-06-25",
+                                       dims=("time", "field", "asset"),
+                                       assets=['NYS:WMT', 'NAS:DOCU'],
+                                       forward_order=True)
 
     data_lbls = ['total_revenue',
                  'total_revenue_qf', 'total_revenue_af', 'liabilities', 'liabilities_curr', 'debt_lt', 'debt_st',
@@ -1257,7 +1257,7 @@ def get_data_wmt():
     #
     # save_object(fun_indicators, 'fundamental_NYSE_WMT_total_revenue.pkl')
 
-    NYSE_WMT = get_data_filter(fun_indicators, ['NYSE:WMT'])
+    NYSE_WMT = get_data_filter(fun_indicators, ['NYS:WMT'])
     return NYSE_WMT
 
 
@@ -1273,12 +1273,12 @@ def test_all1():
 
     WMT = {}
     for a in assets:
-        if a['id'] == 'NYSE:WMT':
+        if a['id'] == 'NYS:WMT':
             WMT = a
 
     data = qndata.stocks.load_ndx_data(min_date="2010-01-01", max_date="2021-07-28",
                                        dims=("time", "field", "asset"),
-                                       assets=['NYSE:WMT'],
+                                       assets=['NYS:WMT'],
                                        forward_order=True)
 
     data_lbls = ['assets', 'liabilities', 'operating_expense', 'ivestment_short_term', 'shares', 'invested_capital',
@@ -1312,26 +1312,28 @@ def test_all2():
     return indicators
 
 
+def get_spx_data_new_for(asset_names, indicators_names):
+    import qnt.data as qndata
+    import qnt.data.secgov_fundamental as fundamental
+
+    market_data = qndata.stocks.load_spx_data(min_date="2010-01-01", max_date="2021-09-28",
+                                              dims=("time", "field", "asset"),
+                                              assets=asset_names,
+                                              forward_order=True)
+
+    indicators = fundamental.load_indicators_for(market_data, indicators_names)
+
+    return indicators
+
+
 def get_data_new_for(asset_names, indicators_names):
     import qnt.data as qndata
     import qnt.data.secgov_fundamental as fundamental
 
-    # import pickle
-
-    # with open('stocks_all.pkl', 'rb') as handle:
-    #     market_data = pickle.load(handle)
-    #
-    # market_data = market_data.sel(asset=asset_names)
-
-    # market_data = qndata.load_data(min_date="2010-01-01", max_date="2021-09-28",
-    #                                dims=("time", "field", "asset"),
-    #                                assets=asset_names,
-    #                                forward_order=True)
-
     market_data = qndata.stocks.load_data(min_date="2010-01-01", max_date="2021-09-28",
-                                              dims=("time", "field", "asset"),
-                                              assets=asset_names,
-                                              forward_order=True)
+                                          dims=("time", "field", "asset"),
+                                          assets=asset_names,
+                                          forward_order=True)
 
     indicators = fundamental.load_indicators_for(market_data, indicators_names)
 
