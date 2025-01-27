@@ -375,6 +375,8 @@ def backtest(
     """
 
     def validate_data(data):
+        if isinstance(data, tuple):
+            return
         mismatches = {
             'stocks': ['stocks', 'stocks_long'],
             'stocks_s&p500': ['stocks_s&p500'],
