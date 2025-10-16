@@ -508,7 +508,6 @@ def get_annual_indicator_names():
         facts = indicator_data.get('facts', [])
         # Use set.issubset for efficient check if all facts are in annual US GAAPS
         if not facts:
-            # If facts is empty, all(fact in ...) is True; preserve original logic
             annual_indicator_names.append(indicator_name)
         elif set(facts).issubset(global_annual_us_gaaps_set):
             annual_indicator_names.append(indicator_name)
