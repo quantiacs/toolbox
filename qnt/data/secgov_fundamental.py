@@ -500,7 +500,6 @@ def get_standard_indicator_names():
 
 
 def get_annual_indicator_names():
-    # Convert GLOBAL_ANNUAL_US_GAAPS to a set for O(1) membership checking
     global_annual_us_gaaps_set = set(GLOBAL_ANNUAL_US_GAAPS)
 
     annual_indicator_names = []
