@@ -68,8 +68,6 @@ def calc_relative_return(data, portfolio_history,
                                                                  roll_slippage)
 
     # adjust weights according to price changes close->open : W_open = W_close_prev * OPEN / CLOSE_prev
-    prev_close = data.loc[f.CLOSE].shift(**{ds.TIME: 1}).ffill(ds.TIME)
-    target_weights = target_weights * data.loc[f.OPEN] / prev_close
     target_weights = output_normalize(target_weights, per_asset)
 
     W = target_weights
@@ -354,9 +352,8 @@ def calc_mean_return(relative_return, max_periods=None, min_periods=1, points_pe
         max_periods = len(relative_return.coords[ds.TIME])
     max_periods = min(max_periods, len(relative_return.coords[ds.TIME]))
     min_periods = min(min_periods, max_periods)
-    return np.exp(
-        np.log(relative_return + 1).rolling({ds.TIME: max_periods},
-                                            min_periods=min_periods).mean(skipna=True)) - 1
+
+    return relative_return.rolling({ds.TIME: max_periods}, min_periods=min_periods).mean(skipna=True)
 
 
 def calc_mean_return_annualized(relative_return, max_periods=None, min_periods=1, points_per_year=None):
@@ -368,8 +365,7 @@ def calc_mean_return_annualized(relative_return, max_periods=None, min_periods=1
     if points_per_year is None:
         points_per_year = calc_avg_points_per_year(relative_return)
 
-    return np.power(calc_mean_return(relative_return, max_periods, min_periods, points_per_year=points_per_year) + 1,
-                    points_per_year) - 1
+    return calc_mean_return(relative_return, max_periods, min_periods, points_per_year=points_per_year) * points_per_year
 
 
 def calc_bias(portfolio_history, per_asset=False):
