@@ -500,11 +500,14 @@ def get_standard_indicator_names():
 
 
 def get_annual_indicator_names():
-    annual_indicator_names = []
+    global_annual_us_gaaps_set = set(GLOBAL_ANNUAL_US_GAAPS)
 
+    annual_indicator_names = []
     for indicator_name, indicator_data in GLOBAL_INDICATORS.items():
         facts = indicator_data.get('facts', [])
-        if all(fact in GLOBAL_ANNUAL_US_GAAPS for fact in facts):
+        if not facts:
+            annual_indicator_names.append(indicator_name)
+        elif set(facts).issubset(global_annual_us_gaaps_set):
             annual_indicator_names.append(indicator_name)
 
     return annual_indicator_names
