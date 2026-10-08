@@ -212,6 +212,10 @@ def cache_put(value, *args):
 
 def crop_cache():
     global cache_min_mod_time
+    if not os.path.isdir(CACHE_DIR):
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        cache_min_mod_time = None
+        return
     now = datetime.datetime.now()
     if cache_min_mod_time is not None and datetime.datetime.now() - cache_min_mod_time < CACHE_RETENTION:
         return
@@ -317,7 +321,7 @@ def from_dict_to_xarray_1d(weights):
 def filter_liquids_xarray_assets_dataarray(assets_xarray_dataarray):
     liquid_xarray_assets_dataarray = assets_xarray_dataarray \
         .where(assets_xarray_dataarray.loc[:, 'is_liquid', :] == 1) \
-        .dropna(ds.TIME, 'all').dropna(ds.ASSET, 'all')
+        .dropna(ds.TIME, how='all').dropna(ds.ASSET, how='all')
 
     return liquid_xarray_assets_dataarray
 
@@ -333,7 +337,7 @@ def check_weights_xarray_dataarray_for_nonliquids(xarray_weights_dataarray, xarr
 def exclude_weights_xarray_dataarray_from_nonliquids(weights_xarray_dataarray, assets_xarray_dataarray):
     liquid_weights_xarray_dataarray = weights_xarray_dataarray \
         .where(assets_xarray_dataarray[0].loc['is_liquid', :] == 1) \
-        .dropna(ds.ASSET, 'all')
+        .dropna(ds.ASSET, how='all')
 
     return liquid_weights_xarray_dataarray
 # ///

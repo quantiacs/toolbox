@@ -32,11 +32,7 @@ def nd_np_adapter(d1_function, nd_args: tp.Tuple[np.ndarray], plain_args: tuple)
         args = nd_args + plain_args
         return d1_function(*args)
     nd_args_2d = tuple(a.reshape(-1, shape[-1]) for a in nd_args)
-    result2d = np.empty_like(nd_args_2d[0], )
-    for i in range(nd_args_2d[0].shape[0]):
-        slices = tuple(a[i] for a in nd_args_2d)
-        args = slices + plain_args
-        result2d[i] = d1_function(*args)
+    result2d = np.array([d1_function(*(a[i] for a in nd_args_2d), *plain_args) for i in range(nd_args_2d[0].shape[0])])
     return result2d.reshape(shape)
 
 

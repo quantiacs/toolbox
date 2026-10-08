@@ -10,13 +10,17 @@ def sma_np_1d(series: np.ndarray, periods: int) -> np.ndarray:
     tail = np.empty((periods,), dtype=np.double)
     not_nan_cnt = 0
     result = np.full(series.shape, np.nan, dtype=np.double)
+    tail_sum = 0.0  
     for i in range(series.shape[0]):
         if not np.isnan(series[i]):
             idx = not_nan_cnt % periods
+            if not_nan_cnt >= periods:
+                tail_sum -= tail[idx]  
             tail[idx] = series[i]
+            tail_sum += series[i]
             not_nan_cnt += 1
             if not_nan_cnt >= periods:
-                result[i] = tail.mean()
+                result[i] = tail_sum / periods
     return result
 
 

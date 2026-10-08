@@ -39,3 +39,9 @@ def mix_weights(primary, secondary, max_weight = 0.049):
 
 def cut_big_positions(weights, max_weight = 0.049):
     return xr.where(abs(weights) > max_weight, np.sign(weights)*max_weight, weights)
+
+
+def normalize_by_max_exposure(weights, max_exposure=0.1):
+    daily_max = abs(weights).max("asset")
+    normalizer = xr.where(daily_max > max_exposure, daily_max / max_exposure, 1)
+    return weights / normalizer

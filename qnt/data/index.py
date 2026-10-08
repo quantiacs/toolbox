@@ -56,10 +56,9 @@ def major_load_data(
         arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
-    if forward_order:
-        arr = arr.sel(**{ds.TIME: slice(None, None, -1)})
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
 
-    arr = arr.dropna(ds.TIME, 'all')
+    arr = arr.dropna(ds.TIME, how='all')
 
     arr.name = "major_indexes"
     return arr.transpose(*dims)
@@ -150,8 +149,7 @@ def load_data(
         arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
-    if forward_order:
-        arr = arr.sel(**{ds.TIME: slice(None, None, -1)})
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
 
     if assets is not None:
         assets = list(set(assets))
@@ -159,7 +157,76 @@ def load_data(
         assets = xr.DataArray(assets, dims=[ds.ASSET], coords={ds.ASSET:assets})
         arr = arr.broadcast_like(assets).sel(asset=assets)
 
-    arr = arr.dropna(ds.TIME, 'all')
+    arr = arr.dropna(ds.TIME, how='all')
 
     arr.name = "indexes"
+    return arr.transpose(*dims)
+
+
+def load_weights_list():
+    """
+     Load list of indexes that have weights defined by their constituents.
+     :return:
+     """
+    track_event("DATA_INDEX_WEIGHTS_META")
+    uri = "idx-weights/list"
+    js = request_with_retry(uri, None)
+    js = js.decode()
+    idx = json.loads(js)
+
+    return idx
+
+
+def load_weights(
+        index_name: str,
+        min_date: tp.Union[str, datetime.date, None] = None,
+        max_date: tp.Union[str, datetime.date, None] = None,
+        dims: tp.Tuple[str, str] = (ds.TIME, ds.ASSET),
+        forward_order: bool = True,
+        tail: tp.Union[datetime.timedelta, int, float] = DEFAULT_TAIL,
+) -> xr.DataArray:
+
+    """
+    Load index constituents weights (benchmark).
+    :param index_name:
+    :param min_date:
+    :param max_date:
+    :param dims:
+    :param forward_order:
+    :param tail:
+    :return:
+    """
+    track_event("DATA_INDEX_WEIGHTS_SERIES")
+    max_date = parse_date(max_date)
+
+    if min_date is not None:
+        min_date = parse_date(min_date)
+    else:
+        min_date = max_date - parse_tail(tail)
+
+    if min_date > max_date:
+        raise Exception("min_date must be less than or equal to max_date")
+
+    params = {"id": index_name, "min_date": min_date.isoformat(), "max_date": max_date.isoformat()}
+    params = json.dumps(params)
+    params = params.encode()
+    raw = request_with_retry("idx-weights/data", params)
+
+    if raw is None or len(raw) < 1:
+        arr = xr.DataArray(
+            [[np.nan]],
+            dims=[ds.TIME, ds.ASSET],
+            coords={
+                ds.TIME: pd.DatetimeIndex([max_date]),
+                ds.ASSET: ['ignore']
+            }
+        )[1:,1:]
+    else:
+        arr = xr.open_dataarray(raw, cache=False, decode_times=True)
+        arr = arr.compute()
+
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
+    arr = arr.dropna(ds.TIME, how='all')
+
+    arr.name = "index_weights"
     return arr.transpose(*dims)

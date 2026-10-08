@@ -23,7 +23,7 @@ def normalize(output, per_asset=False):
             s = 1 if s < 1 else s
         output = output / s
     try:
-        output = output.drop(ds.FIELD)
+        output = output.drop_vars(ds.FIELD)
     except ValueError:
         pass
     return output
@@ -31,7 +31,7 @@ def normalize(output, per_asset=False):
 
 def clean(output, data, kind=None, debug=True):
     """
-    Checks the output and fix common errors:
+    Checks the output and fixes common errors:
         - liquidity
         - missed dates
         - exposure
@@ -45,107 +45,126 @@ def clean(output, data, kind=None, debug=True):
     import qnt.exposure as qne
     from qnt.data.common import ds, f, track_event
 
+
     if kind is None:
         kind = data.name
 
-    output = output.drop(ds.FIELD, errors='ignore')
+    if kind != data.name:
+        if data.name == 'cryptodaily' and kind in ['crypto_daily', 'crypto_daily_long', 'crypto_daily_long_short']:
+            pass
+        else:
+            log_err("WARNING! The kind of the data and the output are different.")
+            log_err("The kind of the data is " + str(data.name) + " and the kind of the output is " + str(kind))
+            log_err("The output will be cleaned with the data kind.")
+
+    output = output.drop_vars(ds.FIELD, errors='ignore')
+
+    logger = log_info if debug else lambda *args, **kwargs: None
 
     with LogSettings(err2info=True):
-        log_info("Output cleaning...")
+
+        logger("Output cleaning...")
 
         single_day = ds.TIME not in output.dims
 
         if not single_day:
             track_event("OUTPUT_CLEAN")
 
-        log_info("fix uniq")
+        logger("Fix unique timestamps")
         if not single_day:
-            # uniq time fix
-            val,idx = np.unique(output.time, return_index=True)
+            val, idx = np.unique(output.time, return_index=True)
             output = output.isel(time=idx)
-        # uniq asset fix
-        val,idx = np.unique(output.asset, return_index=True)
+        val, idx = np.unique(output.asset, return_index=True)
         output = output.isel(asset=idx)
 
         if single_day:
-            output = output.drop(ds.TIME, errors='ignore')
+            output = output.drop_vars(ds.TIME, errors='ignore')
             output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))
         else:
-            log_info("ffill if the current price is None...")
+            logger("Forward filling missing prices...")
             output = output.fillna(0)
             output = output.where(np.isfinite(data.sel(field='close')))
-            if kind != "stocks_nasdaq100":
+            if kind not in ["stocks_nasdaq100", "stocks_s&p500"]:
                 output = output.ffill('time')
             output = output.fillna(0)
 
-        if kind == "stocks" or kind == "stocks_long"  or kind == "stocks_nasdaq100"\
-                or kind == 'crypto_daily' or kind == 'cryptodaily'\
-                or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
-            log_info("Check liquidity...")
+        if f.IS_LIQUID in data.coords['field'].values:
+            logger("Check liquidity...")
             non_liquid = qns.calc_non_liquid(data, output)
             if len(non_liquid.coords[ds.TIME]) > 0:
-                log_info("WARNING! Strategy trades non-liquid assets.")
-                log_info("Fix liquidity...")
+                logger("WARNING! Strategy trades non-liquid assets.")
+                logger("Applying liquidity filter...")
                 is_liquid = data.sel(field=f.IS_LIQUID)
                 is_liquid = xr.align(is_liquid, output, join='right')[0]
                 output = xr.where(is_liquid == 0, 0, output)
-            log_info("Ok.")
+            logger("Ok.")
+        else:
+            logger("WARNING! 'is_liquid' field not found in data. Skipping liquidity check.")
 
         if not single_day:
-            log_info("Check missed dates...")
-            missed_dates = qns.find_missed_dates(output, data)
-            if len(missed_dates) > 0:
-                log_info("WARNING! Output contain missed dates.")
-                log_info("Adding missed dates and set zero...")
-                add = xr.concat([output.isel(time=-1)] * len(missed_dates), pd.DatetimeIndex(missed_dates, name="time"))
-                add = xr.full_like(add, np.nan)
-                output = xr.concat([output, add], dim='time')
-                output = output.fillna(0)
-                if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100"\
-                        or kind == 'crypto_daily' or kind == 'cryptodaily' \
-                        or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
-                    output = output.where(data.sel(field='is_liquid') > 0)
-                output = output.dropna('asset', 'all').dropna('time', 'all').fillna(0)
-                output = normalize(output)
+            logger("Check for missed dates...")
+            if len(output.coords[ds.TIME].values) == 0:
+                logger("WARNING! Output is empty.")
             else:
-                log_info("Ok.")
+                missed_dates = qns.find_missed_dates(output, data)
+                if len(missed_dates) > 0:
+                    logger("WARNING! Output contains missed dates.")
+                    logger("Adding missed dates and setting positions to zero...")
+                    add = xr.concat([output.isel(time=-1)] * len(missed_dates),
+                                    pd.DatetimeIndex(missed_dates, name=ds.TIME))
+                    add = xr.full_like(add, np.nan)
+                    output = xr.concat([output, add], dim='time')
+                    output = output.fillna(0)
+                    if f.IS_LIQUID in data.coords['field'].values:
+                        output = output.where(data.sel(field=f.IS_LIQUID) > 0)
 
-        if kind == 'stocks_long' or kind == 'crypto_daily_long':
-            log_info("Check positive positions...")
-            neg = output.where(output < 0).dropna(ds.TIME, 'all')
+                    output = output.dropna('asset', how='all').dropna('time', how='all').fillna(0)
+                    output = normalize(output)
+                else:
+                    logger("Ok.")
+
+        if kind in ['stocks_long', 'crypto_daily_long']:
+            logger("Check positive positions...")
+            neg = output.where(output < 0).dropna(ds.TIME, how='all')
             if len(neg.time) > 0:
-                log_info("WARNING! Output contains negative positions. Clean...")
+                logger("WARNING! Output contains negative positions. Clean...")
                 output = output.where(output >= 0).fillna(0)
             else:
-                log_info("Ok.")
+                logger("Ok.")
 
-        if kind == "stocks" or kind == "stocks_long":
-            log_info("Check exposure...")
+        if kind in ["stocks", "stocks_long"]:
+            logger("Check exposure...")
             if not qns.check_exposure(output):
-                log_info("Cut big positions...")
+                logger("Cutting oversized positions...")
                 output = qne.cut_big_positions(output)
-                log_info("Check exposure...")
+                logger("Rechecking exposure...")
                 if not qns.check_exposure(output):
-                    log_info("Drop bad days...")
+                    logger("Dropping days with bad exposure...")
                     output = qne.drop_bad_days(output)
 
         if kind == "crypto":
-            log_info("Check BTC...")
-            if output.where(output != 0).dropna("asset", "all").coords[ds.ASSET].values.tolist() != ['BTC']:
-                log_info("WARNING! Output contains not only BTC.")
-                log_info("Fixing...")
-                output=output.sel(asset=['BTC'])
+            logger("Check for BTC-only positions...")
+            assets = output.where(output != 0).dropna("asset", how="all").coords[ds.ASSET].values.tolist()
+            if assets != ['BTC']:
+                logger("WARNING! Output contains assets other than BTC. Filtering...")
+                output = output.sel(asset=['BTC'])
             else:
-                log_info("Ok.")
+                logger("Ok.")
 
-        log_info("Normalization...")
+        if kind in ["stocks_nasdaq100", "stocks_s&p500"]:
+            logger("Normalize and cut big positions for index strategies (nasdaq100, s&p500)...")
+            output = normalize(output)
+            max_exposure = qns.get_default_max_exposure(kind)
+            output = qne.cut_big_positions(output, max_exposure)
+
+        logger("Final normalization...")
         output = normalize(output)
-        log_info("Output cleaning is complete.")
+        logger("Output cleaning complete.")
 
     return output
 
 
-def check(output, data, kind=None):
+def check(output, data, kind=None, check_correlation=True):
     """
     This function checks your output and warn you if it contains errors.
     :return:
@@ -156,14 +175,20 @@ def check(output, data, kind=None):
     if kind is None:
         kind = data.name
 
+    if kind != data.name:
+        if data.name == 'cryptodaily' and kind in ['crypto_daily', 'crypto_daily_long', 'crypto_daily_long_short']:
+            pass
+        else:
+            log_err("WARNING! The kind of the data and the output are different.")
+            log_err("The kind of the data is " + str(data.name) + " and the kind of the output is " + str(kind))
+            log_err("The output will be cleaned with the data kind.")
+
     single_day = ds.TIME not in output.dims
     if single_day:
         output = xr.concat([output], pd.Index([data.coords[ds.TIME].values.max()], name=ds.TIME))
 
     try:
-        if kind == "stocks" or kind == "stocks_long" or kind == "stocks_nasdaq100"\
-                or kind == 'crypto_daily' or kind == 'cryptodaily' \
-                or kind == 'crypto_daily_long' or kind == 'crypto_daily_long_short':
+        if f.IS_LIQUID in data.coords['field'].values:
             log_info("Check liquidity...")
             non_liquid = qns.calc_non_liquid(data, output)
             if len(non_liquid.coords[ds.TIME]) > 0:
@@ -174,22 +199,38 @@ def check(output, data, kind=None):
 
         if not single_day:
             log_info("Check missed dates...")
-            missed_dates = qns.find_missed_dates(output, data)
-            if len(missed_dates) > 0:
-                log_err("ERROR! Some dates were missed)")
-                log_err("Your strategy dropped some days, your strategy should produce a continuous series.")
+            if len(output.coords[ds.TIME].values) == 0:
+                log_err("WARNING! Output is empty.")
             else:
-                log_info("Ok.")
+                missed_dates = qns.find_missed_dates(output, data)
+                if len(missed_dates) > 0:
+                    log_err("ERROR! Some dates were missed)")
+                    log_err("Your strategy dropped some days, your strategy should produce a continuous series.")
+                else:
+                    log_info("Ok.")
             track_event("OUTPUT_CHECK")
 
-        if kind == "stocks" or kind == "stocks_long":
+        if kind in ["stocks", "stocks_long"]:
             log_info("Check exposure...")
             if not qns.check_exposure(output):
                 log_err("Use more assets or/and use qnt.output.clean")
 
+        if kind in ["stocks_nasdaq100", "stocks_s&p500"]:
+            log_info("Check max exposure for index stocks (nasdaq100, s&p500)…")
+            normalized_output = normalize(output)
+            hard_limit = qns.get_default_max_exposure(kind)
+            max_exposure = abs(normalized_output).max().item()
+
+            if max_exposure > hard_limit:
+                log_err("ERROR! The max exposure is too high.")
+                log_err(f"Max exposure: {max_exposure} Hard limit: {hard_limit}")
+                log_err("Use qnt.output.cut_big_positions() or normalize_by_max_exposure() to fix.")
+            else:
+                log_info("Ok.")
+
         if kind == "crypto":
             log_info("Check BTC...")
-            if output.where(output != 0).dropna("asset", "all").coords[ds.ASSET].values.tolist() != ['BTC']:
+            if output.where(output != 0).dropna("asset", how="all").coords[ds.ASSET].values.tolist() != ['BTC']:
                 log_err("ERROR! Output contains not only BTC.\n")
                 log_err("Remove the other assets from the output or use qnt.output.clean")
             else:
@@ -199,27 +240,10 @@ def check(output, data, kind=None):
             if abs(output).sum() == 0:
                 log_err("ERROR! Output is empty. All positions are zero.")
             else:
-                # if kind == 'crypto' or kind == 'cryptofutures' or kind == 'crypto_futures':
-                #     log_info("Check holding time...")
-                #     ht = qns.calc_avg_holding_time(output)
-                #     ht = ht.isel(time=-1).values
-                #     if ht < 4:
-                #         log_err("ERROR! The holding time is too low.", ht, "<", 4)
-                #     else:
-                #         log_info("Ok.")
-                #
-                # if kind == 'stocks_long':
-                #     log_info("Check holding time...")
-                #     ht = qns.calc_avg_holding_time(output)
-                #     ht = ht.isel(time=-1).values
-                #     if ht < 15:
-                #         log_err("ERROR! The holding time is too low.", ht, "<", 15)
-                #     else:
-                #         log_info("Ok.")
 
-                if kind == 'stocks_long' or kind == 'crypto_daily_long':
+                if kind in ['stocks_long', 'crypto_daily_long']:
                     log_info("Check positive positions...")
-                    neg = output.where(output < 0).dropna(ds.TIME, 'all')
+                    neg = output.where(output < 0).dropna(ds.TIME, how='all')
                     if len(neg.time) > 0:
                         log_err("ERROR! Output contains negative positions.")
                         log_err("Drop all negative positions.")
@@ -231,14 +255,15 @@ def check(output, data, kind=None):
                 sr = calc_sharpe_ratio_for_check(data, output, kind, True)
                 log_info("Sharpe Ratio =", sr)
 
-                if sr < 1:
-                    log_err("ERROR! The Sharpe Ratio is too low.", sr, '<', 1,)
-                    log_err("Improve the strategy and make sure that the in-sample Sharpe Ratio more than 1.")
+                if sr < 0.7:
+                    log_err("ERROR! The Sharpe Ratio is too low.", sr, '<', 0.7,)
+                    log_err("Improve the strategy and make sure that the in-sample Sharpe Ratio more than 0.7.")
                 else:
                     log_info("Ok.")
 
-                log_info("Check correlation.")
-                qns.check_correlation(output, data, False)
+                if check_correlation:
+                    log_info("Check correlation.")
+                    qns.check_correlation(output, data, print_stack_trace=False)
     except Exception as e:
         log_err(e)
 
@@ -257,9 +282,11 @@ def calc_sharpe_ratio_for_check(data, output, kind=None, check_dates=True):
     if kind is None:
         kind = data.name
 
+    mean_estimator = 'arithmetic' if kind in ['crypto_daily', 'cryptodaily', 'crypto_daily_long',
+                                              'crypto_daily_long_short'] else 'geometric'
     start_date = qns.get_default_is_start_date_for_type(kind)
     sdd = pd.Timestamp(start_date)
-    osd = pd.Timestamp(output.where(abs(output).sum('asset') > 0).dropna('time', 'all').time.min().values)
+    osd = pd.Timestamp(output.where(abs(output).sum('asset') > 0).dropna('time', how='all').time.min().values)
     dsd = pd.Timestamp(data.time.min().values)
     if check_dates:
         if (dsd - sdd).days > 10:
@@ -279,7 +306,7 @@ def calc_sharpe_ratio_for_check(data, output, kind=None, check_dates=True):
     log_info("Period: " + str(sd.date()) + " - " + str(fd.date()))
     output_slice = align(output, data.time, sd, fd)
     rr = qns.calc_relative_return(data, output_slice)
-    sr = qns.calc_sharpe_ratio_annualized(rr)
+    sr = qns.calc_sharpe_ratio_annualized(rr, mean_estimator=mean_estimator)
     sr = sr.isel(time=-1).values
     return sr
 

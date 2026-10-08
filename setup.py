@@ -2,19 +2,22 @@ from setuptools import setup
 
 setup(
     name="qnt",
-    version="0.0.276",
+    version="0.0.507",
     url="https://quantiacs.com",
     license='MIT',
     packages=['qnt', 'qnt.ta', 'qnt.data', 'qnt.examples'],
     package_data={'qnt': ['*.ipynb']},
     install_requires=[
-        'scipy>=1.4.1',
-        'pandas==1.2.5',
-        'xarray>=0.16.0',
-        'numpy>=1.18',
-        'tabulate>=0.8.3',
-        'bottleneck>=1.3.1',
-        'numba==0.53',
-        'progressbar2>=3.37,<4'
+        'scipy>=1.14.0,<2.0.0',
+        'pandas>=2.2,<2.3',
+        'xarray>=2024.11.0,<2026.0.0',
+        'numpy>=1.26.0,<2.3.0',
+        'tabulate>=0.9.0,<1.0.0',
+        'bottleneck>=1.4.2,<2.0.0',
+        'numba>=0.59.0,<1.0.0',
+        'progressbar2>=3.55,<5',
+        'cftime>=1.6.4,<2.0.0',
+        'plotly>=5.22,<7.0',
+        'matplotlib>=3.10.0,<4.0.0'
     ]
 )

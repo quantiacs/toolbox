@@ -67,10 +67,9 @@ def load_currency_data(
         arr = arr.broadcast_like(xr.DataArray(assets, dims='asset', coords={'asset':assets}))
         arr = arr.sel(asset=assets)
 
-    if forward_order:
-        arr = arr.sel(**{ds.TIME: slice(None, None, -1)})
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
 
-    arr = arr.dropna(ds.TIME, 'all')
+    arr = arr.dropna(ds.TIME, how='all')
 
     arr.name = "imf_currency"
     return arr.transpose(*dims)
@@ -135,10 +134,9 @@ def load_commodity_data(
         arr = arr.broadcast_like(xr.DataArray(assets, dims='asset', coords={'asset':assets}))
         arr = arr.sel(asset=assets)
 
-    if forward_order:
-        arr = arr.sel(**{ds.TIME: slice(None, None, -1)})
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
 
-    arr = arr.dropna(ds.TIME, 'all')
+    arr = arr.dropna(ds.TIME, how='all')
 
     arr.name = "imf_commodity"
     return arr.transpose(*dims)

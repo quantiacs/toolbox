@@ -9,12 +9,12 @@ def load_list(
         min_date: tp.Union[str, datetime.date, None] = None,
         max_date: tp.Union[str, datetime.date, None] = None,
         tail: tp.Union[datetime.timedelta, float, int] = 4 * 365,
-        stocks_type:tp.Union[str, int] = ''
+        stocks_type: tp.Union[str, int] = ''
 ):
     """
     :return: list of dicts with info for all tickers
     """
-    track_event("DATA_STOCKS_LIST")
+    track_event("DATA_STOCKS_LIST_{}".format(stocks_type.upper()))
     max_date = parse_date(max_date)
 
     if min_date is not None:
@@ -51,8 +51,14 @@ def load_ndx_list(min_date: tp.Union[str, datetime.date, None] = None,
     return load_list(min_date, max_date, tail, stocks_type='NASDAQ100')
 
 
+def load_spx_list(min_date: tp.Union[str, datetime.date, None] = None,
+        max_date: tp.Union[str, datetime.date, None] = None,
+        tail: tp.Union[datetime.timedelta, float, int] = 4 * 365):
+    return load_list(min_date, max_date, tail, stocks_type='SPX500')
+
+
 def load_data(
-        assets: tp.List[tp.Union[dict,str]] = None,
+        assets: tp.List[tp.Union[dict, str]] = None,
         min_date: tp.Union[str, datetime.date, None] = None,
         max_date: tp.Union[str, datetime.date, None] = None,
         dims: tp.Tuple[str, str, str] = (ds.FIELD, ds.TIME, ds.ASSET),
@@ -72,22 +78,49 @@ def load_data(
     t = time.time()
     data = load_origin_data(assets=assets, min_date=min_date, max_date=max_date, tail=tail, stocks_type=stocks_type)
     log_info("Data loaded " + str(round(time.time() - t)) + "s")
-    data = adjust_by_splits(data, False)
+    if stocks_type == '':
+        data = data.sortby(ds.TIME, ascending=True)
+        data = adjust_by_splits(data, False)
     data = data.transpose(*dims)
-    if forward_order:
-        data = data.sel(**{ds.TIME: slice(None, None, -1)})
-    data.name = "stocks_nasdaq100" if stocks_type == "NASDAQ100" else "stocks"
+    data = data.sortby(ds.TIME, ascending=forward_order)
+    data.name = "stocks_nasdaq100" if stocks_type.lower() in ["nasdaq100", "ndx100"] else "stocks_s&p500"\
+        if stocks_type.lower() == "spx500" else "stocks"
     return data
 
 
-def load_ndx_data(assets: tp.List[tp.Union[dict,str]] = None,
+def get_stocks_type_by_data_name(data_name: str) -> str:
+    """
+    Infer the stocks_type argument for load_list() from an xarray.DataArray.name field.
+    Returns a string like "NASDAQ100", "SPX500", or "" if unmatched.
+    """
+    if not data_name:
+        return ""
+    name_lower = data_name.lower()
+    if "nasdaq100" in name_lower or "ndx100" in name_lower:
+        return "NASDAQ100"
+    elif "s&p500" in name_lower or "spx500" in name_lower:
+        return "SPX500"
+    return ""
+
+
+def load_ndx_data(assets: tp.List[tp.Union[dict, str]] = None,
         min_date: tp.Union[str, datetime.date, None] = None,
         max_date: tp.Union[str, datetime.date, None] = None,
         dims: tp.Tuple[str, str, str] = (ds.FIELD, ds.TIME, ds.ASSET),
         forward_order: bool = True,
         tail: tp.Union[datetime.timedelta, float, int] = DEFAULT_TAIL,
 ) -> xr.DataArray:
-    return load_data(assets, min_date, max_date, dims, forward_order, tail, stocks_type='NASDAQ100')
+    return load_data(assets, min_date, max_date, dims, forward_order, tail, stocks_type='NDX100')
+
+
+def load_spx_data(assets: tp.List[tp.Union[dict,str]] = None,
+        min_date: tp.Union[str, datetime.date, None] = None,
+        max_date: tp.Union[str, datetime.date, None] = None,
+        dims: tp.Tuple[str, str, str] = (ds.FIELD, ds.TIME, ds.ASSET),
+        forward_order: bool = True,
+        tail: tp.Union[datetime.timedelta, float, int] = DEFAULT_TAIL,
+) -> xr.DataArray:
+    return load_data(assets, min_date, max_date, dims, forward_order, tail, stocks_type='SPX500')
 
 
 def adjust_by_splits(data, make_copy=True):
@@ -133,15 +166,16 @@ BATCH_LIMIT = 300000
 
 def load_origin_data(assets=None, min_date=None, max_date=None,
                      tail: tp.Union[datetime.timedelta, float, int] = 4 * 365, stocks_type=''):
-    track_event("DATA_STOCKS_SERIES")
+    track_event("DATA_STOCKS_SERIES_{}".format(stocks_type.upper()))
     setup_ids()
 
     if assets is None:
         assets_array = load_list(min_date=min_date, max_date=max_date, tail=tail, stocks_type=stocks_type)
         assets_arg = [a['id'] for a in assets_array]
     else:
-        if not idt.is_asset_ids_cache_exist():
-            load_list(min_date="2005-01-01", stocks_type=stocks_type)
+        DEFAULT_MIN_DATE = "2005-01-01"
+        if not idt.is_asset_ids_cache_exist() or not idt.has_asset_id_translations(assets):
+            load_list(min_date=DEFAULT_MIN_DATE, stocks_type=stocks_type)
 
         assets = [a['id'] if type(a) == dict else a for a in assets]
         assets_arg = assets
@@ -188,17 +222,18 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
             + str(round(time.time() - start_time)) + "s"
         )
 
-    fields = [f.OPEN, f.LOW, f.HIGH, f.CLOSE, f.VOL, f.DIVS, f.SPLIT, f.SPLIT_CUMPROD, f.IS_LIQUID]
+    fields = [f.OPEN, f.LOW, f.HIGH, f.CLOSE, f.VOL, f.DIVS, f.SPLIT_CUMPROD, f.IS_LIQUID] if stocks_type.lower() in ['ndx100', 'spx500'] \
+        else [f.OPEN, f.LOW, f.HIGH, f.CLOSE, f.VOL, f.DIVS, f.SPLIT, f.SPLIT_CUMPROD, f.IS_LIQUID]
     if len(chunks) == 0:
         whole = xr.DataArray(
-            [[[np.nan]]]*len(fields),
+            [[[np.nan]]] * len(fields),
             dims=[ds.FIELD, ds.TIME, ds.ASSET],
             coords={
                 ds.FIELD: fields,
                 ds.TIME: pd.DatetimeIndex([max_date]),
                 ds.ASSET: ['ignore']
             }
-        )[:,1:,1:]
+        )[:, 1:, 1:]
     else:
         whole = xr.concat(chunks, ds.ASSET)
 
@@ -206,7 +241,7 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
 
     if assets is not None:
         assets = sorted(assets)
-        assets = xr.DataArray(assets, dims=[ds.ASSET], coords={ds.ASSET:assets})
+        assets = xr.DataArray(assets, dims=[ds.ASSET], coords={ds.ASSET: assets})
         whole = whole.broadcast_like(assets)
 
     whole = whole.transpose(ds.FIELD, ds.TIME, ds.ASSET)
@@ -216,7 +251,7 @@ def load_origin_data(assets=None, min_date=None, max_date=None,
         np.sort(whole.coords[ds.ASSET])
     ]
 
-    return whole.dropna(ds.TIME, 'all')
+    return whole.dropna(ds.TIME, how='all')
 
 
 def load_origin_data_chunk(assets, min_date, max_date, stocks_type):  # min_date and max_date - iso date str

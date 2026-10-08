@@ -62,7 +62,10 @@ def load_data(
         arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
-    arr = arr.sel(time=slice(max_date.isoformat(), min_date.isoformat(), 1))
+
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
+    arr = arr.sel(time=slice(min_date.isoformat() if forward_order else max_date.isoformat(),
+                             max_date.isoformat() if forward_order else min_date.isoformat()))
 
     if assets is not None:
         assets = [a['id'] if type(a) == dict else a for a in assets]
@@ -71,10 +74,8 @@ def load_data(
         assets = sorted(list(set(assets)))
         assets = xr.DataArray(assets, dims=[ds.ASSET], coords={ds.ASSET:assets})
         arr = arr.broadcast_like(assets)
-        arr = arr.sel(asset=assets).dropna(ds.TIME, 'all')
+        arr = arr.sel(asset=assets).dropna(ds.TIME, how='all')
 
-    if forward_order:
-        arr = arr.sel(**{ds.TIME: slice(None, None, -1)})
 
     arr.name = "futures"
     return arr.transpose(*dims)

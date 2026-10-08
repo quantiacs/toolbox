@@ -87,3 +87,12 @@ def is_asset_ids_cache_exist():
     if server_id_to_user_id is not None and user_id_to_server_id is not None:
         return True
     return False
+
+
+def has_asset_id_translations(assets):
+    assets = [a['id'] if isinstance(a, dict) else a for a in assets]
+    load_id_translation_table()
+    for u in assets:
+        if user_id_to_server_id.get(u) is None:
+            return False
+    return True

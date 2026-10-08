@@ -60,12 +60,11 @@ def load_data(
         arr = xr.open_dataarray(raw, cache=False, decode_times=True)
         arr = arr.compute()
 
-    arr = arr.sel(time=slice(max_date,min_date))
+    arr = arr.sortby(ds.TIME, ascending=forward_order)
+    arr = arr.sel(time=slice(min_date.isoformat() if forward_order else max_date.isoformat(),
+                             max_date.isoformat() if forward_order else min_date.isoformat()))
 
-    if forward_order:
-        arr = arr.sel(**{ds.TIME: slice(None, None, -1)})
-
-    arr = arr.dropna(ds.TIME, 'all')
+    arr = arr.dropna(ds.TIME, how='all')
 
     arr.name = "blockchaincom_metric"
     return arr

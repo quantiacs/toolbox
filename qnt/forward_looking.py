@@ -59,8 +59,8 @@ def calc_output_and_check_forward_looking(data, strategy):
     else:
         cropped_data = cropped_data.loc[{ds.TIME: slice(last_date, None)}]
 
-    cropped_data = cropped_data.dropna(ds.ASSET, 'all')
-    cropped_data = cropped_data.dropna(ds.TIME, 'all')
+    cropped_data = cropped_data.dropna(ds.ASSET, how='all')
+    cropped_data = cropped_data.dropna(ds.TIME, how='all')
 
     log_info("Computing of the cropped output...")
     cropped_output = strategy(cropped_data)
@@ -87,7 +87,7 @@ def check_forward_looking(cropped_output, whole_output):
     whole_output = whole_output.fillna(0)
 
     diff = whole_output - cropped_output
-    # print(diff.where(diff!=0).dropna('time', 'all').dropna('asset','all'))
+    # print(diff.where(diff!=0).dropna('time', how='all').dropna('asset',how='all'))
     delta = abs(diff).max().values
     if delta > FORWARD_LOOKING_TEST_DELTA:
         log_info('WARNING: This strategy uses forward looking! Delta = ' + str(delta))

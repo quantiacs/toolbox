@@ -14,6 +14,7 @@ import qnt.stats
 from .data import id_translation as idt
 import qnt.output
 import sys
+from qnt.data.common import ds
 
 fractions_fn = "../fractions.nc.gz"
 last_data_fn = "../last_data.txt"
@@ -53,7 +54,7 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
         min_date = (pd.Timestamp(qnt.stats.get_default_is_start_date_for_type(data_type))).to_pydatetime()
         data = qnt.data.load_data_by_type(data_type, min_date=min_date)
         if 'is_liquid' in data.field:
-            data = data.where(data.sel(field='is_liquid') > 0).dropna('time', 'all')
+            data = data.where(data.sel(field='is_liquid') > 0).dropna('time', how='all')
         data = data.time
         dates = [data.isel(time=-1).values, data.isel(time=1).values] \
                 + [data.isel(time=round(len(data) * (i + 1) / (passes - 1))).values for i in range(passes - 2)]
@@ -86,11 +87,11 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
         i += 1
         log_info("pass:", i, "/", len(dates), "max_date:", date.isoformat())
 
-        if data_type == 'stocks' or data_type == 'stocks_long' or data_type == 'stocks_nasdaq100':
+        if data_type in ['stocks', 'stocks_long', 'stocks_nasdaq100', 'stocks_s&p500']:
             timeout = 30 * 60
-        if data_type == 'futures':
+        elif data_type == 'futures':
             timeout = 10 * 60
-        if data_type == 'crypto' or data_type == 'crypto_futures' or data_type == 'cryptofutures':
+        elif data_type in ['crypto', 'crypto_futures', 'cryptofutures']:
             timeout = 5 * 60
 
         data_url = urllib.parse.urljoin(urllib.parse.urljoin(qnt.data.common.BASE_URL, 'last/'), date.isoformat()) + "/"
@@ -123,23 +124,26 @@ def evaluate_passes(data_type='stocks', passes=3, dates=None):
             log_info("Check the output...")
             output = load_output(fractions_fn, date)
 
-            if data_type == 'stocks' or data_type == 'stocks_long':
+            if data_type in ['stocks', 'stocks_long']:
                 qnt.stats.check_exposure(output)
 
             log_info("Load data...")
             data = qnt.data.load_data_by_type(data_type, assets=output.asset.values.tolist(),
                                               min_date=str(output.time.min().values)[:10], max_date=date)
 
-            if data_type == 'stocks' or data_type == 'stocks_long' or data_type == 'stocks_nasdaq100':
+            if data_type in ['stocks', 'stocks_long', 'stocks_nasdaq100', 'stocks_s&p500']:
                 non_liquid = qnt.stats.calc_non_liquid(data, output)
                 if len(non_liquid.time) > 0:
                     log_err("ERROR! The output contains illiquid positions.")
 
-            missed = qnt.stats.find_missed_dates(output, data)
-            if len(missed) > 0:
-                log_err("ERROR: some dates are missed in the output.", missed)
+            if len(output.coords[ds.TIME].values) == 0:
+                log_err("WARNING! Output is empty.")
             else:
-                log_info("There are no missed dates.")
+                missed = qnt.stats.find_missed_dates(output, data)
+                if len(missed) > 0:
+                    log_err("ERROR: some dates are missed in the output.", missed)
+                else:
+                    log_info("There are no missed dates.")
 
             del data
 
@@ -175,7 +179,7 @@ def assemble_output(add_mode='all'):
         date = datetime.date.fromisoformat(date)
         fn = result_dir + "/" + f
         _output = load_output(fn, date)
-        _output = _output.where(_output.time <= np.datetime64(date)).dropna('time', 'all')
+        _output = _output.where(_output.time <= np.datetime64(date)).dropna('time', how='all')
         if len(_output) == 0:
             continue
         if output is None:
@@ -183,9 +187,9 @@ def assemble_output(add_mode='all'):
             output = _output
         else:
             if add_mode == 'all':
-                _output = _output.where(_output.time > output.time.max()).dropna('time', 'all')
+                _output = _output.where(_output.time > output.time.max()).dropna('time', how='all')
             elif add_mode == 'one':
-                _output = _output.where(_output.time == np.datetime64(date)).dropna('time', 'all')
+                _output = _output.where(_output.time == np.datetime64(date)).dropna('time', how='all')
             else:
                 raise Exception("wrong add_mode")
             if len(_output) == 0:
@@ -206,16 +210,15 @@ def load_output(fn, date):
 
 
 def check_output(output, data_type='stocks'):
-    if data_type != 'stocks' and data_type != 'stocks_long' and data_type != 'futures' \
-            and data_type != 'crypto' and data_type != 'crypto_futures' and data_type != 'cryptofutures' \
-            and data_type != 'stocks_nasdaq100':
+    if data_type not in ['stocks', 'stocks_long', 'futures', 'crypto', 'crypto_futures', 'cryptofutures',
+                         'stocks_nasdaq100', 'stocks_s&p500']:
         log_err("Unsupported data_type", data_type)
         return
 
     in_sample_points = qnt.stats.get_default_is_period_for_type(data_type)
 
     min_date = qnt.stats.get_default_is_start_date_for_type(data_type)
-    output_tail = output.where(output.time > np.datetime64(min_date)).dropna('time', 'all')
+    output_tail = output.where(output.time > np.datetime64(min_date)).dropna('time', how='all')
     if len(output_tail) < in_sample_points:
         log_err("ERROR! In sample period does not contain enough points. " +
                 str(len(output_tail)) + " < " + str(in_sample_points))
